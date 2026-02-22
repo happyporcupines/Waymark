@@ -82,23 +82,6 @@ document.addEventListener('click', (event) => {
         return;
     }
 
-    const popupEntryLink = target.closest('.popup-entry-link');
-    if (popupEntryLink) {
-        event.preventDefault();
-        const pointKey = popupEntryLink.getAttribute('data-point-key');
-        const entryId = Number(popupEntryLink.getAttribute('data-entry-id'));
-        if (!pointStore.has(pointKey)) {
-            return;
-        }
-
-        const pointRecord = pointStore.get(pointKey);
-        const selectedEntry = findEntryById(pointRecord, entryId);
-        if (selectedEntry) {
-            openEntryPopup(pointRecord, selectedEntry, pointRecord.mapPoint);
-        }
-        return;
-    }
-
     const editorBtn = target.closest('.editor-btn');
     if (editorBtn) {
         applyEditorCommand(editorBtn.getAttribute('data-cmd'));
@@ -194,24 +177,29 @@ function openEntryPopup(pointRecord, entry, location) {
 }
 
 function openEntrySelectorPopup(pointRecord, location) {
-    const entryLinks = pointRecord.entries
-        .map((entry, index) => `
-            <li>
-                <a href="#" class="popup-entry-link" data-point-key="${escapeHtml(pointRecord.pointKey)}" data-entry-id="${entry.id}">
-                    ${escapeHtml(entry.title || `Entry ${index + 1}`)}
-                </a>
-            </li>
-        `)
-        .join('');
+    const container = document.createElement('div');
+    const prompt = document.createElement('p');
+    prompt.textContent = 'Select an entry:';
+    container.appendChild(prompt);
+
+    const list = document.createElement('ul');
+    pointRecord.entries.forEach((entry, index) => {
+        const item = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'popup-entry-option';
+        button.textContent = entry.title || `Entry ${index + 1}`;
+        button.addEventListener('click', () => {
+            openEntryPopup(pointRecord, entry, location || pointRecord.mapPoint);
+        });
+        item.appendChild(button);
+        list.appendChild(item);
+    });
+    container.appendChild(list);
 
     appView.popup.open({
         title: `Entries at ${pointRecord.lat}, ${pointRecord.lon}`,
-        content: `
-            <div>
-                <p>Select an entry:</p>
-                <ul>${entryLinks}</ul>
-            </div>
-        `,
+        content: container,
         location: location || pointRecord.mapPoint
     });
 }
@@ -512,6 +500,16 @@ function initMap() {
         });
 
         view.on('click', async (event) => {
+            const hitResponse = await view.hitTest(event);
+            const graphicResult = hitResponse.results.find((result) => result.graphic.layer === appGraphicsLayer);
+
+            if (!graphicResult) {
+                view.popup.close();
+            }
+        });
+
+        view.on('double-click', async (event) => {
+            event.stopPropagation();
             const hitResponse = await view.hitTest(event);
             const graphicResult = hitResponse.results.find((result) => result.graphic.layer === appGraphicsLayer);
 
