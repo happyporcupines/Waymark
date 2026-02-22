@@ -32,6 +32,73 @@ html, body {
     border: none; border-radius: 5px; cursor: pointer;
 }
 
+.entry-modal-box {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    width: 90vw;
+    height: 85vh;
+    max-width: 1000px;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+.entry-coords {
+    font-size: 0.85em;
+    color: #666;
+    margin: 0 0 12px 0;
+}
+
+.editor-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.editor-toolbar .editor-btn {
+    width: auto;
+    padding: 6px 10px;
+    background-color: #f0f0f0;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+.entry-editor {
+    flex: 1;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 12px;
+    overflow-y: auto;
+    background: #fff;
+}
+
+.entry-editor:focus {
+    outline: none;
+    border-color: #a43855;
+}
+
+.entry-modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.entry-modal-actions button {
+    width: auto;
+    padding: 10px 16px;
+}
+
+.save-btn {
+    background-color: #a43855;
+}
+
+.cancel-btn {
+    background-color: #999;
+}
+
 #guestBtn {
     margin-top: 14px;
 }
@@ -69,6 +136,44 @@ html, body {
 
 #viewDiv { height: 100%; width: 100%; }
 
+.entry-detail-panel {
+    display: none;
+    width: 320px;
+    background: #fff;
+    border-left: 1px solid #ccc;
+    padding: 12px;
+    overflow-y: auto;
+    z-index: 5;
+}
+
+.entry-detail-panel.active {
+    display: block;
+}
+
+.entry-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.entry-detail-header button {
+    width: auto;
+    padding: 6px 10px;
+    background: #999;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+}
+
+.entry-detail-meta {
+    color: #666;
+    font-size: 0.85em;
+}
+
+.entry-detail-content {
+    line-height: 1.5;
+}
+
 .map-widget-row {
     display: flex;
     align-items: center;
@@ -102,5 +207,16 @@ html, body {
 
     .mobile-nav {
         display: none; /* Hide bottom nav on desktop */
+    }
+}
+
+@media (max-width: 767px) {
+    .entry-detail-panel.active {
+        position: absolute;
+        right: 0;
+        top: 0;
+        height: 100%;
+        max-width: 85vw;
+        z-index: 25;
     }
 }

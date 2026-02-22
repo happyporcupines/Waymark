@@ -1,14 +1,26 @@
-
-// 1. Mock Login Logic
+// 1. App state
 let mapInitialized = false;
 let isGuestMode = false;
 let guestEntryWarningShown = false;
+
+let journalEntries = [];
+let currentClickCoords = null;
+let currentPointKey = null;
+let currentEditingEntryId = null;
+
+let nextEntryId = 1;
+const pointStore = new Map();
+
+let appView = null;
+let appGraphicsLayer = null;
+let GraphicCtor = null;
 
 function enterApp(userLabel, guestMode) {
     isGuestMode = guestMode;
     if (!isGuestMode) {
         guestEntryWarningShown = false;
     }
+
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('mainApp').style.display = 'flex';
     document.getElementById('userInfo').innerText = userLabel;
@@ -52,165 +64,406 @@ document.addEventListener('click', (event) => {
     if (target.closest('#navList')) {
         document.getElementById('sidebar').classList.add('active');
         document.querySelector('.map-container').style.display = 'none';
+        return;
+    }
+
+    if (target.closest('#cancelEntryBtn')) {
+        closeEntryModal();
+        return;
+    }
+
+    if (target.closest('#saveEntryBtn')) {
+        saveEntry();
+        return;
+    }
+
+    if (target.closest('#closeDetailBtn')) {
+        closeDetailPanel();
+        return;
+    }
+
+    const editorBtn = target.closest('.editor-btn');
+    if (editorBtn) {
+        applyEditorCommand(editorBtn.getAttribute('data-cmd'));
     }
 });
 
-// Global variables to hold our diary data temporarily
-let journalEntries = [];
-let currentClickCoords = null;
+function roundCoord(value) {
+    return Math.round(value * 1000) / 1000;
+}
+
+function buildPointKey(lat, lon) {
+    return `${roundCoord(lat)},${roundCoord(lon)}`;
+}
+
+function htmlToText(html) {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    return (temp.textContent || '').trim();
+}
+
+function truncateText(text, maxLength = 180) {
+    if (text.length <= maxLength) {
+        return text;
+    }
+    return `${text.slice(0, maxLength)}...`;
+}
+
+function getOrCreatePointRecord(coords) {
+    const pointKey = buildPointKey(coords.lat, coords.lon);
+    if (!pointStore.has(pointKey)) {
+        pointStore.set(pointKey, {
+            pointKey,
+            lat: coords.lat,
+            lon: coords.lon,
+            mapPoint: coords.mapPoint,
+            entries: [],
+            graphic: null
+        });
+    }
+    return pointStore.get(pointKey);
+}
+
+function getLatestEntry(pointRecord) {
+    if (!pointRecord || pointRecord.entries.length === 0) {
+        return null;
+    }
+    return pointRecord.entries[pointRecord.entries.length - 1];
+}
+
+function updatePointGraphic(pointRecord) {
+    const latestEntry = getLatestEntry(pointRecord);
+    if (!latestEntry) {
+        return;
+    }
+
+    const preview = truncateText(latestEntry.textPlain, 180);
+
+    const popupTemplate = {
+        title: latestEntry.title,
+        content: `
+            <div>
+                <p>${preview}</p>
+                ${latestEntry.textPlain.length > 180 ? '<p><em>Use "Read full entry" below to view everything.</em></p>' : ''}
+            </div>
+        `,
+        actions: [
+            { title: 'Read full entry', id: 'read-full-entry', className: 'esri-icon-documentation' },
+            { title: 'Edit entry', id: 'edit-entry', className: 'esri-icon-edit' },
+            { title: 'Add new entry to same point', id: 'add-same-point', className: 'esri-icon-plus-circled' }
+        ]
+    };
+
+    if (!pointRecord.graphic) {
+        pointRecord.graphic = new GraphicCtor({
+            geometry: pointRecord.mapPoint,
+            symbol: {
+                type: 'simple-marker',
+                color: [164, 56, 85],
+                outline: { color: [255, 255, 255], width: 2 }
+            },
+            attributes: {
+                pointKey: pointRecord.pointKey,
+                latestEntryId: latestEntry.id,
+                title: latestEntry.title
+            },
+            popupTemplate
+        });
+        appGraphicsLayer.add(pointRecord.graphic);
+    } else {
+        pointRecord.graphic.attributes = {
+            pointKey: pointRecord.pointKey,
+            latestEntryId: latestEntry.id,
+            title: latestEntry.title
+        };
+        pointRecord.graphic.popupTemplate = popupTemplate;
+    }
+}
+
+function openEntryModal(mode, pointRecord, entryToEdit) {
+    const titleInput = document.getElementById('entryTitle');
+    const editor = document.getElementById('entryEditor');
+    const modal = document.getElementById('entryModal');
+    const modalTitle = document.getElementById('entryModalTitle');
+
+    currentPointKey = pointRecord.pointKey;
+    currentEditingEntryId = entryToEdit ? entryToEdit.id : null;
+
+    document.getElementById('entryCoords').innerText = `Location: ${pointRecord.lat}, ${pointRecord.lon}`;
+    modalTitle.innerText = mode === 'edit' ? 'Edit Diary Entry ✏️' : 'New Diary Entry 📓';
+
+    if (entryToEdit) {
+        titleInput.value = entryToEdit.title;
+        editor.innerHTML = entryToEdit.textHtml;
+    } else {
+        titleInput.value = '';
+        editor.innerHTML = '';
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closeEntryModal() {
+    document.getElementById('entryModal').style.display = 'none';
+    document.getElementById('entryTitle').value = '';
+    document.getElementById('entryEditor').innerHTML = '';
+    currentEditingEntryId = null;
+}
+
+function upsertGuestArrayEntry(entry, pointRecord) {
+    if (!isGuestMode) {
+        return;
+    }
+
+    const existingIndex = journalEntries.findIndex((item) => item.id === entry.id);
+    const guestEntry = {
+        id: entry.id,
+        title: entry.title,
+        text: entry.textPlain,
+        lat: pointRecord.lat,
+        lon: pointRecord.lon
+    };
+
+    if (existingIndex >= 0) {
+        journalEntries[existingIndex] = guestEntry;
+    } else {
+        journalEntries.push(guestEntry);
+    }
+}
+
+function updateSidebarList() {
+    const listContainer = document.getElementById('entriesList');
+    listContainer.innerHTML = '';
+
+    if (journalEntries.length === 0) {
+        listContainer.innerHTML = '<p>No entries yet. Tap the map to create one!</p>';
+        return;
+    }
+
+    journalEntries.forEach((entry) => {
+        const entryDiv = document.createElement('div');
+        entryDiv.style.borderBottom = '1px solid #ccc';
+        entryDiv.style.padding = '10px 0';
+        entryDiv.innerHTML = `
+            <h4 style="margin: 0 0 5px 0; color: #a43855;">${entry.title}</h4>
+            <p style="margin: 0; font-size: 0.9em;">${truncateText(entry.text, 120)}</p>
+            <small style="color: #666;">Lat: ${entry.lat}, Lon: ${entry.lon}</small>
+        `;
+        listContainer.appendChild(entryDiv);
+    });
+}
+
+function openDetailPanel(pointRecord, entry) {
+    const detailPanel = document.getElementById('entryDetailPanel');
+    document.getElementById('detailTitle').innerText = entry.title;
+    document.getElementById('detailMeta').innerText = `Location: ${pointRecord.lat}, ${pointRecord.lon}`;
+    document.getElementById('detailContent').innerHTML = entry.textHtml;
+    detailPanel.classList.add('active');
+}
+
+function closeDetailPanel() {
+    document.getElementById('entryDetailPanel').classList.remove('active');
+}
+
+function findEntryById(pointRecord, entryId) {
+    return pointRecord.entries.find((entry) => entry.id === entryId) || getLatestEntry(pointRecord);
+}
+
+function saveEntry() {
+    if (!currentPointKey || !pointStore.has(currentPointKey)) {
+        return;
+    }
+
+    const pointRecord = pointStore.get(currentPointKey);
+    const title = document.getElementById('entryTitle').value.trim();
+    const textHtml = document.getElementById('entryEditor').innerHTML.trim();
+    const textPlain = htmlToText(textHtml);
+
+    if (!title || !textPlain) {
+        alert("Don't be lazy, fill out both the title and your memory! 🖤");
+        return;
+    }
+
+    if (currentEditingEntryId) {
+        const editingEntry = pointRecord.entries.find((entry) => entry.id === currentEditingEntryId);
+        if (editingEntry) {
+            editingEntry.title = title;
+            editingEntry.textHtml = textHtml;
+            editingEntry.textPlain = textPlain;
+            upsertGuestArrayEntry(editingEntry, pointRecord);
+        }
+    } else {
+        const newEntry = {
+            id: nextEntryId++,
+            title,
+            textHtml,
+            textPlain,
+            createdAt: Date.now()
+        };
+        pointRecord.entries.push(newEntry);
+        upsertGuestArrayEntry(newEntry, pointRecord);
+    }
+
+    updatePointGraphic(pointRecord);
+    updateSidebarList();
+    closeEntryModal();
+}
+
+function applyEditorCommand(command) {
+    const editor = document.getElementById('entryEditor');
+    editor.focus();
+
+    if (command === 'alphaList') {
+        document.execCommand('insertOrderedList', false);
+        const selection = window.getSelection();
+        if (selection && selection.anchorNode) {
+            const parent = selection.anchorNode.nodeType === 1 ? selection.anchorNode : selection.anchorNode.parentElement;
+            const orderedList = parent ? parent.closest('ol') : null;
+            if (orderedList) {
+                orderedList.style.listStyleType = 'upper-alpha';
+            }
+        }
+        return;
+    }
+
+    if (command === 'checkList') {
+        document.execCommand('insertHTML', false, '<ul style="list-style-type:none;"><li>☐ Checklist item</li></ul>');
+        return;
+    }
+
+    document.execCommand(command, false);
+}
 
 // 2. Esri Map Initialization
 function initMap() {
     require([
-        "esri/Map",
-        "esri/views/MapView",
-        "esri/config",
-        "esri/widgets/Search",
-        "esri/widgets/Locate",
-        "esri/widgets/BasemapGallery",
-        "esri/widgets/Expand",
-        "esri/Graphic",            // KUROMI UPDATE: For drawing pins
-        "esri/layers/GraphicsLayer" // KUROMI UPDATE: For holding the pins
+        'esri/Map',
+        'esri/views/MapView',
+        'esri/config',
+        'esri/widgets/Search',
+        'esri/widgets/Locate',
+        'esri/widgets/BasemapGallery',
+        'esri/widgets/Expand',
+        'esri/Graphic',
+        'esri/layers/GraphicsLayer'
     ], (Map, MapView, esriConfig, Search, Locate, BasemapGallery, Expand, Graphic, GraphicsLayer) => {
+        esriConfig.apiKey = 'AAPTxy8BH1VEsoebNVZXo8HurP99AuF0u6hFXE5XsMHKuzBSGN5LvVSYilawxafx85hn9PCGXebaJHWlitVBT5zeCUaAyEvqj1BxcDK_zJC-tVX6YCERGHXEpZz6YEPcefm_vmXsNbePUUZ7JAXpHdXjsnh5x7OFNgUY22Xi2rwI6cYzTClvMoxyiN9hd4ig364gzmVxs5mLuQQYqSwxcO8eUnY8D8k0W9Tj3o-WFWbJGlMs42rjT9Cgf1AsZxwet7SYAT1_FDERp6GX';
 
-        esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurP99AuF0u6hFXE5XsMHKuzBSGN5LvVSYilawxafx85hn9PCGXebaJHWlitVBT5zeCUaAyEvqj1BxcDK_zJC-tVX6YCERGHXEpZz6YEPcefm_vmXsNbePUUZ7JAXpHdXjsnh5x7OFNgUY22Xi2rwI6cYzTClvMoxyiN9hd4ig364gzmVxs5mLuQQYqSwxcO8eUnY8D8k0W9Tj3o-WFWbJGlMs42rjT9Cgf1AsZxwet7SYAT1_FDERp6GX";
-
-        // Create a graphics layer and add it to the map
-        const graphicsLayer = new GraphicsLayer();
+        GraphicCtor = Graphic;
+        appGraphicsLayer = new GraphicsLayer();
 
         const map = new Map({
-            basemap: "arcgis-human-geography-dark",
-            layers: [graphicsLayer] // Add the layer here!
+            basemap: 'arcgis-human-geography-dark',
+            layers: [appGraphicsLayer]
         });
 
         const view = new MapView({
-            map: map,
+            map,
             center: [-106.644568, 35.126358],
             zoom: 9,
-            container: "viewDiv"
+            container: 'viewDiv'
         });
 
-        // --- WIDGETS SECTION (Kept exactly as you had it!) ---
-        const searchWidget = new Search({ view: view, container: "searchContainer" });
-        const locateBtn = new Locate({ view: view });
-        const basemapGallery = new BasemapGallery({ view: view });
+        appView = view;
 
-        const widgetRow = document.createElement("div");
-        widgetRow.className = "map-widget-row";
+        new Search({ view, container: 'searchContainer' });
 
-        const locateContainer = document.createElement("div");
-        const basemapContainer = document.createElement("div");
+        const locateBtn = new Locate({ view });
+        const basemapGallery = new BasemapGallery({ view });
+
+        const widgetRow = document.createElement('div');
+        widgetRow.className = 'map-widget-row';
+
+        const locateContainer = document.createElement('div');
+        const basemapContainer = document.createElement('div');
         widgetRow.appendChild(locateContainer);
         widgetRow.appendChild(basemapContainer);
 
         locateBtn.container = locateContainer;
 
-        const bgExpand = new Expand({
-            view: view, content: basemapGallery, container: basemapContainer, autoCollapse: true
+        new Expand({
+            view,
+            content: basemapGallery,
+            container: basemapContainer,
+            autoCollapse: true
         });
 
-        view.ui.add(widgetRow, { position: "bottom-right", index: 0 });
+        view.ui.add(widgetRow, { position: 'bottom-right', index: 0 });
 
         view.when(() => {
             locateBtn.locate().catch(() => {
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition((position) => {
-                        view.goTo({ center: [position.coords.longitude, position.coords.latitude], zoom: 13 });
+                        view.goTo({
+                            center: [position.coords.longitude, position.coords.latitude],
+                            zoom: 13
+                        });
                     });
                 }
             });
         });
-        // --- END WIDGETS SECTION ---
 
-        // 3. The Magic: Map Clicks & Modal Logic
-        view.on("click", (event) => {
-            if (isGuestMode && !guestEntryWarningShown) {
-                alert("Guest mode note: diary entries are stored temporarily and will be deleted if you refresh the page.");
-                guestEntryWarningShown = true;
-            }
-
-            // Save coordinates globally so the Save button can access them later
-            currentClickCoords = {
-                lat: Math.round(event.mapPoint.latitude * 1000) / 1000,
-                lon: Math.round(event.mapPoint.longitude * 1000) / 1000,
-                mapPoint: event.mapPoint
-            };
-
-            // Update the modal text and show it
-            document.getElementById('entryCoords').innerText = `Location: ${currentClickCoords.lat}, ${currentClickCoords.lon}`;
-            document.getElementById('entryModal').style.display = 'flex';
-        });
-
-        // 4. Handling Modal Buttons (Save & Cancel)
-        document.getElementById('cancelEntryBtn').addEventListener('click', () => {
-            document.getElementById('entryModal').style.display = 'none'; // Hide modal
-            clearForm(); // Clean up inputs
-        });
-
-        document.getElementById('saveEntryBtn').addEventListener('click', () => {
-            const title = document.getElementById('entryTitle').value;
-            const text = document.getElementById('entryText').value;
-
-            if (!title || !text) {
-                alert("Don't be lazy, fill out both the title and your memory! 🖤");
+        view.popup.on('trigger-action', (popupEvent) => {
+            const selectedGraphic = view.popup.selectedFeature;
+            if (!selectedGraphic) {
                 return;
             }
 
-            // A. Create the Graphic (The Pin)
-            const pointGraphic = new Graphic({
-                geometry: currentClickCoords.mapPoint,
-                symbol: {
-                    type: "simple-marker",
-                    color: [164, 56, 85], // Kuromi Burgundy!
-                    outline: { color: [255, 255, 255], width: 2 }
-                },
-                attributes: {
-                    title: title,
-                    description: text
-                },
-                popupTemplate: {
-                    title: "{title}",
-                    content: "{description}"
-                }
-            });
-
-            // B. Add pin to map
-            graphicsLayer.add(pointGraphic);
-
-            // C. Save to local guest array only in guest mode
-            if (isGuestMode) {
-                journalEntries.push({ title: title, text: text, lat: currentClickCoords.lat, lon: currentClickCoords.lon });
-                updateSidebarList();
+            const pointKey = selectedGraphic.attributes.pointKey;
+            if (!pointStore.has(pointKey)) {
+                return;
             }
 
-            // D. Close modal and clean up
-            document.getElementById('entryModal').style.display = 'none';
-            clearForm();
+            const pointRecord = pointStore.get(pointKey);
+            const selectedEntry = findEntryById(pointRecord, selectedGraphic.attributes.latestEntryId);
+
+            if (!selectedEntry) {
+                return;
+            }
+
+            if (popupEvent.action.id === 'read-full-entry') {
+                openDetailPanel(pointRecord, selectedEntry);
+            }
+
+            if (popupEvent.action.id === 'edit-entry') {
+                openEntryModal('edit', pointRecord, selectedEntry);
+            }
+
+            if (popupEvent.action.id === 'add-same-point') {
+                currentClickCoords = {
+                    lat: pointRecord.lat,
+                    lon: pointRecord.lon,
+                    mapPoint: pointRecord.mapPoint
+                };
+                openEntryModal('new', pointRecord, null);
+            }
         });
 
-        // Helper function to update the HTML list in the sidebar
-        function updateSidebarList() {
-            const listContainer = document.getElementById('entriesList');
-            listContainer.innerHTML = ''; // Clear current list
+        view.on('click', async (event) => {
+            const hitResponse = await view.hitTest(event);
+            const graphicResult = hitResponse.results.find((result) => result.graphic.layer === appGraphicsLayer);
 
-            journalEntries.forEach(entry => {
-                const entryDiv = document.createElement('div');
-                entryDiv.style.borderBottom = "1px solid #ccc";
-                entryDiv.style.padding = "10px 0";
-                entryDiv.innerHTML = `
-                    <h4 style="margin: 0 0 5px 0; color: #a43855;">${entry.title}</h4>
-                    <p style="margin: 0; font-size: 0.9em;">${entry.text}</p>
-                    <small style="color: #666;">Lat: ${entry.lat}, Lon: ${entry.lon}</small>
-                `;
-                listContainer.appendChild(entryDiv);
-            });
-        }
+            if (graphicResult) {
+                view.popup.open({
+                    features: [graphicResult.graphic],
+                    location: event.mapPoint
+                });
+                return;
+            }
 
-        // Helper function to reset the form inputs
-        function clearForm() {
-            document.getElementById('entryTitle').value = '';
-            document.getElementById('entryText').value = '';
-            currentClickCoords = null;
-        }
+            if (isGuestMode && !guestEntryWarningShown) {
+                alert('Guest mode note: diary entries are stored temporarily and will be deleted if you refresh the page.');
+                guestEntryWarningShown = true;
+            }
+
+            currentClickCoords = {
+                lat: roundCoord(event.mapPoint.latitude),
+                lon: roundCoord(event.mapPoint.longitude),
+                mapPoint: event.mapPoint
+            };
+
+            const pointRecord = getOrCreatePointRecord(currentClickCoords);
+            openEntryModal('new', pointRecord, null);
+        });
     });
 }

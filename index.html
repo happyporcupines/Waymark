@@ -40,6 +40,15 @@
         <div class="map-container">
             <div id="viewDiv"></div>
         </div>
+
+        <aside id="entryDetailPanel" class="entry-detail-panel">
+            <div class="entry-detail-header">
+                <h3 id="detailTitle">Entry</h3>
+                <button id="closeDetailBtn" type="button">Close</button>
+            </div>
+            <p id="detailMeta" class="entry-detail-meta"></p>
+            <div id="detailContent" class="entry-detail-content"></div>
+        </aside>
     </div>
 
     <nav class="mobile-nav">
@@ -51,16 +60,30 @@
 </div>
 
 <div id="entryModal" class="overlay" style="display: none;">
-    <div class="login-box">
-        <h3 style="margin-top: 0;">New Diary Entry 📓</h3>
-        <p id="entryCoords" style="font-size: 0.8em; color: #666; margin-bottom: 15px;"></p>
+    <div class="entry-modal-box">
+        <h3 id="entryModalTitle">New Diary Entry 📓</h3>
+        <p id="entryCoords" class="entry-coords"></p>
 
         <input type="text" id="entryTitle" placeholder="Entry Title" />
-        <textarea id="entryText" placeholder="Write your memory here..." rows="4" style="width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; font-family: sans-serif; resize: vertical;"></textarea>
 
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
-            <button id="saveEntryBtn" type="button" style="background-color: #a43855;">Save</button>
-            <button id="cancelEntryBtn" type="button" style="background-color: #999;">Cancel</button>
+        <div class="editor-toolbar">
+            <button type="button" class="editor-btn" data-cmd="bold">B</button>
+            <button type="button" class="editor-btn" data-cmd="italic">I</button>
+            <button type="button" class="editor-btn" data-cmd="underline">U</button>
+            <button type="button" class="editor-btn" data-cmd="strikeThrough">S</button>
+            <button type="button" class="editor-btn" data-cmd="insertUnorderedList">• List</button>
+            <button type="button" class="editor-btn" data-cmd="insertOrderedList">123</button>
+            <button type="button" class="editor-btn" data-cmd="alphaList">ABC</button>
+            <button type="button" class="editor-btn" data-cmd="checkList">☑</button>
+            <button type="button" class="editor-btn" data-cmd="indent">Indent</button>
+            <button type="button" class="editor-btn" data-cmd="outdent">Outdent</button>
+        </div>
+
+        <div id="entryEditor" class="entry-editor" contenteditable="true"></div>
+
+        <div class="entry-modal-actions">
+            <button id="saveEntryBtn" type="button" class="save-btn">Save</button>
+            <button id="cancelEntryBtn" type="button" class="cancel-btn">Cancel</button>
         </div>
     </div>
 </div>
