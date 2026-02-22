@@ -14,7 +14,6 @@ const pointStore = new Map();
 let appView = null;
 let appGraphicsLayer = null;
 let GraphicCtor = null;
-let activeSelectorPointKey = null;
 
 function enterApp(userLabel, guestMode) {
     isGuestMode = guestMode;
@@ -165,8 +164,6 @@ function openEntryPopup(pointRecord, entry, location) {
         return;
     }
 
-    activeSelectorPointKey = null;
-
     pointRecord.graphic.attributes = {
         pointKey: pointRecord.pointKey,
         selectedEntryId: entry.id,
@@ -181,24 +178,23 @@ function openEntryPopup(pointRecord, entry, location) {
 }
 
 function openEntrySelectorPopup(pointRecord, location) {
-    activeSelectorPointKey = pointRecord.pointKey;
-
-    const selectorActions = pointRecord.entries.map((entry, index) => ({
-        title: entry.title || `Entry ${index + 1}`,
-        id: `select-entry-${entry.id}`,
-        className: 'esri-icon-documentation'
+    const features = pointRecord.entries.map((entry) => new GraphicCtor({
+        geometry: pointRecord.mapPoint,
+        symbol: pointRecord.graphic ? pointRecord.graphic.symbol : {
+            type: 'simple-marker',
+            color: [164, 56, 85],
+            outline: { color: [255, 255, 255], width: 2 }
+        },
+        attributes: {
+            pointKey: pointRecord.pointKey,
+            selectedEntryId: entry.id,
+            title: entry.title
+        },
+        popupTemplate: buildEntryPopupTemplate(entry)
     }));
 
-    selectorActions.push({
-        title: 'Close',
-        id: 'close-popup',
-        className: 'esri-icon-close'
-    });
-
     appView.popup.open({
-        title: `Entries at ${pointRecord.lat}, ${pointRecord.lon}`,
-        content: 'Select an entry',
-        actions: selectorActions,
+        features,
         location: location || pointRecord.mapPoint
     });
 }
@@ -465,21 +461,6 @@ function initMap() {
         view.popup.on('trigger-action', (popupEvent) => {
             if (popupEvent.action.id === 'close-popup') {
                 view.popup.close();
-                activeSelectorPointKey = null;
-                return;
-            }
-
-            if (popupEvent.action.id.startsWith('select-entry-')) {
-                if (!activeSelectorPointKey || !pointStore.has(activeSelectorPointKey)) {
-                    return;
-                }
-
-                const pointRecord = pointStore.get(activeSelectorPointKey);
-                const entryId = Number(popupEvent.action.id.replace('select-entry-', ''));
-                const selectedEntry = findEntryById(pointRecord, entryId);
-                if (selectedEntry) {
-                    openEntryPopup(pointRecord, selectedEntry, view.popup.location || pointRecord.mapPoint);
-                }
                 return;
             }
 
