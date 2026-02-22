@@ -1,20 +1,30 @@
-// Kuromi's custom logic file!
 
 // 1. Mock Login Logic
+let mapInitialized = false;
+
+function enterApp(userLabel) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'flex';
+    document.getElementById('userInfo').innerText = userLabel;
+
+    if (!mapInitialized) {
+        initMap();
+        mapInitialized = true;
+    }
+}
+
 document.getElementById('loginBtn').addEventListener('click', () => {
     const email = document.getElementById('emailInput').value;
 
     if (email) {
-        // Hide login, show main app
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('mainApp').style.display = 'flex';
-        document.getElementById('userInfo').innerText = `User: ${email}`;
-
-        // Initialize Map ONLY after login to save resources
-        initMap();
+        enterApp(`User: ${email}`);
     } else {
         alert("Please enter an email to log in!");
     }
+});
+
+document.getElementById('guestBtn').addEventListener('click', () => {
+    enterApp('Guest mode: data will not be saved');
 });
 
 // Mobile Navigation Logic (Switching between Map and Entries List)
