@@ -50,6 +50,21 @@
 
 </div>
 
+<div id="entryModal" class="overlay" style="display: none;">
+    <div class="login-box">
+        <h3 style="margin-top: 0;">New Diary Entry 📓</h3>
+        <p id="entryCoords" style="font-size: 0.8em; color: #666; margin-bottom: 15px;"></p>
+
+        <input type="text" id="entryTitle" placeholder="Entry Title" />
+        <textarea id="entryText" placeholder="Write your memory here..." rows="4" style="width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; font-family: sans-serif; resize: vertical;"></textarea>
+
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button id="saveEntryBtn" type="button" style="background-color: #a43855;">Save</button>
+            <button id="cancelEntryBtn" type="button" style="background-color: #999;">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://js.arcgis.com/4.26/"></script>
 <script src="js/app.js"></script>
 </body>
