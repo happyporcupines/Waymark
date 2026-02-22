@@ -68,6 +68,12 @@ html, body {
 
 #viewDiv { height: 100%; width: 100%; }
 
+.map-controls-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 /* Mobile Bottom Navigation */
 .mobile-nav {
     display: flex; justify-content: space-around;

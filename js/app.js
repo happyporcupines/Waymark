@@ -55,8 +55,11 @@ function initMap() {
         "esri/Map",
         "esri/views/MapView",
         "esri/config",
-        "esri/widgets/Search"
-    ], (Map, MapView, esriConfig, Search) => {
+        "esri/widgets/Search",
+        "esri/widgets/Locate",
+        "esri/widgets/BasemapGallery",
+        "esri/widgets/Expand"
+    ], (Map, MapView, esriConfig, Search, Locate, BasemapGallery, Expand) => {
 
         // Your API Key
         esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurP99AuF0u6hFXE5XsMHKuzBSGN5LvVSYilawxafx85hn9PCGXebaJHWlitVBT5zeCUaAyEvqj1BxcDK_zJC-tVX6YCERGHXEpZz6YEPcefm_vmXsNbePUUZ7JAXpHdXjsnh5x7OFNgUY22Xi2rwI6cYzTClvMoxyiN9hd4ig364gzmVxs5mLuQQYqSwxcO8eUnY8D8k0W9Tj3o-WFWbJGlMs42rjT9Cgf1AsZxwet7SYAT1_FDERp6GX";
@@ -75,6 +78,38 @@ function initMap() {
         const searchWidget = new Search({
             view: view,
             container: "searchContainer"
+        });
+
+        const basemapGallery = new BasemapGallery({
+            view: view
+        });
+
+        const mapControlsRow = document.createElement("div");
+        mapControlsRow.className = "map-controls-row";
+
+        const locateContainer = document.createElement("div");
+        const basemapContainer = document.createElement("div");
+
+        mapControlsRow.appendChild(locateContainer);
+        mapControlsRow.appendChild(basemapContainer);
+
+        const locateBtn = new Locate({
+            view: view,
+            container: locateContainer
+        });
+
+        new Expand({
+            view: view,
+            content: basemapGallery,
+            container: basemapContainer,
+            expandIconClass: "esri-icon-basemap"
+        });
+
+        view.ui.add(mapControlsRow, "bottom-right");
+
+        view.when(() => {
+            locateBtn.locate().catch(() => {
+            });
         });
 
         // 3. The Magic: Listening for map clicks to add a diary entry
