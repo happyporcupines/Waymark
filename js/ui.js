@@ -100,10 +100,21 @@ function openDetailPanel(pointRecord, entry) {
     const dateStr = entry.createdAt ? formatDate(entry.createdAt) : '';
     const locationStr = `Location: ${pointRecord.lat}, ${pointRecord.lon}`;
     document.getElementById('detailMeta').innerText = dateStr ? `${dateStr} • ${locationStr}` : locationStr;
+
+    const pointStory = stories.find((story) => story.entryIds.includes(entry.id)) || null;
     
     let detailHtml = '';
     if (entry.image) {
         detailHtml = `<img src="${entry.image}" alt="Entry image" style="width: 100%; max-height: 300px; object-fit: contain; margin-bottom: 15px; border-radius: 4px;">`;
+    }
+    if (pointStory && entry.storyDistanceInfo) {
+        detailHtml += `
+            <div style="background: #f8e8eb; padding: 10px; margin-bottom: 12px; border-radius: 6px; border-left: 4px solid #a43855;">
+                <strong>Part of Story: ${escapeHtml(pointStory.title)}</strong><br/>
+                <small>Distance from previous: ${entry.storyDistanceInfo.distFromPrev.toFixed(2)} mi</small><br/>
+                <small>Distance to next: ${entry.storyDistanceInfo.distToNext.toFixed(2)} mi</small>
+            </div>
+        `;
     }
     detailHtml += entry.textHtml;
     

@@ -1,15 +1,23 @@
 // Popup and Point Graphic Management
 
+function findStoryForEntry(entry) {
+    if (!entry) {
+        return null;
+    }
+    return stories.find((story) => story.entryIds.includes(entry.id)) || null;
+}
+
 // Builds a popup template for a given entry, including story mileage info if available
 function buildEntryPopupTemplate(entry, pointStory = null) {
     const preview = truncateText(entry.textPlain, 180);
+    const resolvedStory = pointStory || findStoryForEntry(entry);
 
     //Inject story mileage data if it exists!
     let storyHtml = '';
-    if (pointStory && entry.storyDistanceInfo) {
+    if (resolvedStory && entry.storyDistanceInfo) {
         storyHtml = `
             <div style="background: #f8e8eb; padding: 10px; margin-bottom: 10px; border-radius: 6px; border-left: 4px solid #a43855;">
-                <strong>Part of Story: ${escapeHtml(pointStory.title)}</strong><br/>
+                <strong>Part of Story: ${escapeHtml(resolvedStory.title)}</strong><br/>
                 <small>Distance from previous: ${entry.storyDistanceInfo.distFromPrev.toFixed(2)} mi</small><br/>
                 <small>Distance to next: ${entry.storyDistanceInfo.distToNext.toFixed(2)} mi</small>
             </div>
@@ -39,13 +47,14 @@ function openEntryPopup(pointRecord, entry, location) {
     if (!pointRecord.graphic) {
         return;
     }
+    const pointStory = findStoryForEntry(entry);
     // Update the graphic's attributes and popup template to reflect the selected entry
     pointRecord.graphic.attributes = {
         pointKey: pointRecord.pointKey,
         selectedEntryId: entry.id,
         title: entry.title
     };
-    pointRecord.graphic.popupTemplate = buildEntryPopupTemplate(entry);
+    pointRecord.graphic.popupTemplate = buildEntryPopupTemplate(entry, pointStory);
     // Open the popup at the specified location or default to the point's map location
     appView.popup.open({
         features: [pointRecord.graphic],
@@ -67,7 +76,7 @@ function openEntrySelectorPopup(pointRecord, location) {
             selectedEntryId: entry.id,
             title: entry.title
         },
-        popupTemplate: buildEntryPopupTemplate(entry)
+        popupTemplate: buildEntryPopupTemplate(entry, findStoryForEntry(entry))
     }));
 
     appView.popup.open({

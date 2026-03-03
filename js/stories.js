@@ -130,10 +130,20 @@ function updateStoryMapGraphics(story) {
     story.graphicsLayer.removeAll();
     const orderedPoints = [];
     const storyEntries = [];
+    story.totalMiles = 0;
     //
     story.entryIds.forEach(eid => {
         const entry = journalEntries.find(je => je.id === eid);
-        if (entry) { orderedPoints.push([entry.lon, entry.lat]); storyEntries.push(entry); }
+        if (entry) {
+            const pointKey = buildPointKey(entry.lat, entry.lon);
+            const pointRecord = pointStore.get(pointKey);
+            if (pointRecord && pointRecord.mapPoint) {
+                orderedPoints.push([pointRecord.mapPoint.longitude, pointRecord.mapPoint.latitude]);
+            } else {
+                orderedPoints.push([entry.lon, entry.lat]);
+            }
+            storyEntries.push(entry);
+        }
     });
 
     // Draw Line & Calculate Math
@@ -143,7 +153,7 @@ function updateStoryMapGraphics(story) {
     if (orderedPoints.length >= 2 && PolylineCtor && geometryEngineModule) {
         const polyline = new PolylineCtor({ paths: [orderedPoints], spatialReference: { wkid: 4326 } });
         totalMiles = geometryEngineModule.geodesicLength(polyline, "miles");
-        story.totalMiles = totalMiles;
+        story.totalMiles = Number.isFinite(totalMiles) ? totalMiles : 0;
 
         const lineGraphic = new GraphicCtor({
             geometry: polyline,
@@ -160,8 +170,15 @@ function updateStoryMapGraphics(story) {
             if (i < orderedPoints.length - 1) {
                 distToNext = geometryEngineModule.geodesicLength(new PolylineCtor({ paths: [[orderedPoints[i], orderedPoints[i+1]]], spatialReference: { wkid: 4326 } }), "miles");
             }
-            segmentMiles.push({ distFromPrev, distToNext });
+            segmentMiles.push({
+                distFromPrev: Number.isFinite(distFromPrev) ? distFromPrev : 0,
+                distToNext: Number.isFinite(distToNext) ? distToNext : 0
+            });
         }
+    }
+
+    while (segmentMiles.length < storyEntries.length) {
+        segmentMiles.push({ distFromPrev: 0, distToNext: 0 });
     }
 
     // Attach math to entries and re-render points into the proper layers!
