@@ -187,9 +187,11 @@ function initMap() {
             isDraggingLocationIcon = false;
             
             // Get the map point at the drop location
+            // Need to calculate position relative to the view container, not the viewport
+            const rect = view.container.getBoundingClientRect();
             const mapPoint = view.toMap({
-                x: event.clientX,
-                y: event.clientY
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
             });
             
             if (!mapPoint) {
