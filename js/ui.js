@@ -3,6 +3,7 @@
 // Opens the entry modal for creating a new entry or editing an existing one, pre-filling data if editing
 function openEntryModal(mode, pointRecord, entryToEdit) {
     const titleInput = document.getElementById('entryTitle');
+    const dateInput = document.getElementById('entryDate');
     const editor = document.getElementById('entryEditor');
     const modal = document.getElementById('entryModal');
     const modalTitle = document.getElementById('entryModalTitle');
@@ -18,10 +19,11 @@ function openEntryModal(mode, pointRecord, entryToEdit) {
     document.getElementById('entryCoords').innerText = `Location: ${pointRecord.lat}, ${pointRecord.lon}`;
     modalTitle.innerText = mode === 'edit' ? 'Edit Diary Entry ✏️' : 'New Diary Entry 📓';
     
-    // If editing, pre-fill the title, editor, and image with the existing entry data; if creating new, clear the fields
+    // If editing, pre-fill the title, editor, date, and image with the existing entry data; if creating new, clear the fields
     if (entryToEdit) {
         titleInput.value = entryToEdit.title;
         editor.innerHTML = entryToEdit.textHtml;
+        dateInput.value = timestampToDatetimeLocal(entryToEdit.createdAt);
         
         // Load existing image if present
         if (entryToEdit.image) {
@@ -35,6 +37,7 @@ function openEntryModal(mode, pointRecord, entryToEdit) {
     } else {
         titleInput.value = '';
         editor.innerHTML = '';
+        dateInput.value = timestampToDatetimeLocal(Date.now());
         imagePreview.innerHTML = '';
         removeImageBtn.style.display = 'none';
     }
@@ -78,8 +81,10 @@ function updateSidebarList() {
             imageHtml = `<img src="${entry.image}" alt="Entry image" style="width: 100%; height: 80px; object-fit: cover; margin: 8px 0; border-radius: 4px;">`;
         }
         
+        const entryDate = entry.createdAt ? formatDate(entry.createdAt) : '';
         entryDiv.innerHTML = `
             <h4 style="margin: 0 0 5px 0; color: #a43855;">${entry.title}</h4>
+            ${entryDate ? `<small style="color: #888; display: block; margin-bottom: 5px;">${entryDate}</small>` : ''}
             ${imageHtml}
             <p style="margin: 0; font-size: 0.9em;">${truncateText(entry.text, 120)}</p>
             <small style="color: #666;">Lat: ${entry.lat}, Lon: ${entry.lon}</small>
@@ -92,7 +97,9 @@ function updateSidebarList() {
 function openDetailPanel(pointRecord, entry) {
     const detailPanel = document.getElementById('entryDetailPanel');
     document.getElementById('detailTitle').innerText = entry.title;
-    document.getElementById('detailMeta').innerText = `Location: ${pointRecord.lat}, ${pointRecord.lon}`;
+    const dateStr = entry.createdAt ? formatDate(entry.createdAt) : '';
+    const locationStr = `Location: ${pointRecord.lat}, ${pointRecord.lon}`;
+    document.getElementById('detailMeta').innerText = dateStr ? `${dateStr} • ${locationStr}` : locationStr;
     
     let detailHtml = '';
     if (entry.image) {

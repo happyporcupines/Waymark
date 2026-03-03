@@ -24,7 +24,7 @@ function initMap() {
         appGraphicsLayer = new GraphicsLayer();
 
         const map = new Map({
-            basemap: 'arcgis-human-geography-dark',
+            basemap: 'arcgis-midcentury',
             layers: [appGraphicsLayer]
         });
 

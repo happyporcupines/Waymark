@@ -34,3 +34,32 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
+
+// Formats a timestamp to a readable date string
+function formatDate(timestamp) {
+    const date = new Date(timestamp);
+    const options = { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    };
+    return date.toLocaleDateString('en-US', options);
+}
+
+// Converts a timestamp to datetime-local input format (YYYY-MM-DDTHH:MM)
+function timestampToDatetimeLocal(timestamp) {
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Converts datetime-local input value to timestamp
+function datetimeLocalToTimestamp(datetimeLocalValue) {
+    return new Date(datetimeLocalValue).getTime();
+}

@@ -40,7 +40,8 @@ function upsertGuestArrayEntry(entry, pointRecord) {
         text: entry.textPlain,
         lat: pointRecord.lat,
         lon: pointRecord.lon,
-        image: entry.image || null
+        image: entry.image || null,
+        createdAt: entry.createdAt
     };
 
     if (existingIndex >= 0) {
@@ -55,17 +56,19 @@ function saveEntry() {
     if (!currentPointKey || !pointStore.has(currentPointKey)) {
         return;
     }
-    // Get the current point record based on the currentPointKey, and extract the title and text from the modal inputs
+    // Get the current point record based on the currentPointKey, and extract the title, text, and date from the modal inputs
     const pointRecord = pointStore.get(currentPointKey);
     const title = document.getElementById('entryTitle').value.trim();
     const textHtml = document.getElementById('entryEditor').innerHTML.trim();
     const textPlain = htmlToText(textHtml);
+    const dateValue = document.getElementById('entryDate').value;
+    const createdAt = dateValue ? datetimeLocalToTimestamp(dateValue) : Date.now();
     // Validate that both the title and the text are not empty; if either is empty, show an alert and do not save
     if (!title || !textPlain) {
         alert("Don't be lazy, fill out both the title and your memory! 🖤");
         return;
     }
-    // If we're editing an existing entry, update its title, text, and image
+    // If we're editing an existing entry, update its title, text, date, and image
     // if we're creating a new entry, create it and add it to the point record's entries array
     if (currentEditingEntryId) {
         const editingEntry = pointRecord.entries.find((entry) => entry.id === currentEditingEntryId);
@@ -73,6 +76,7 @@ function saveEntry() {
             editingEntry.title = title;
             editingEntry.textHtml = textHtml;
             editingEntry.textPlain = textPlain;
+            editingEntry.createdAt = createdAt;
             editingEntry.image = currentEntryImage;
             upsertGuestArrayEntry(editingEntry, pointRecord);
         }
@@ -82,7 +86,7 @@ function saveEntry() {
             title,
             textHtml,
             textPlain,
-            createdAt: Date.now(),
+            createdAt: createdAt,
             image: currentEntryImage
         };
         pointRecord.entries.push(newEntry);
