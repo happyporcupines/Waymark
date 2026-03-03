@@ -148,23 +148,6 @@ document.getElementById('entryImageInput')?.addEventListener('change', (event) =
     reader.readAsDataURL(file);
 });
 
-// Draggable location icon handlers
-const dragLocationIcon = document.getElementById('dragLocationIcon');
-
-if (dragLocationIcon) {
-    dragLocationIcon.addEventListener('dragstart', (event) => {
-        isDraggingLocationIcon = true;
-        dragLocationIcon.classList.add('dragging');
-        event.dataTransfer.effectAllowed = 'copy';
-        event.dataTransfer.setData('text/plain', 'location-icon');
-    });
-
-    dragLocationIcon.addEventListener('dragend', (event) => {
-        isDraggingLocationIcon = false;
-        dragLocationIcon.classList.remove('dragging');
-    });
-}
-
 // Mobile navigation state management
 function updateMobileNavState(activeNavId) {
     const navButtons = document.querySelectorAll('.mobile-nav button');

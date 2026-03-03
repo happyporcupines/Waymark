@@ -2,7 +2,6 @@
 let mapInitialized = false;
 let isGuestMode = false;
 let guestEntryWarningShown = false;
-let isDraggingLocationIcon = false;
 
 // Data structures
 let journalEntries = [];

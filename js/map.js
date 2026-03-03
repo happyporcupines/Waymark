@@ -127,11 +127,6 @@ function initMap() {
         // Set up a listener for single-click events on the view to select existing entries
         // This is more mobile-friendly than double-click
         view.on('click', async (event) => {
-            // Don't trigger if we're in the middle of a drag operation
-            if (isDraggingLocationIcon) {
-                return;
-            }
-            
             const hitResponse = await view.hitTest(event);
             const graphicResult = hitResponse.results.find((result) => {
                 const graphic = result && result.graphic ? result.graphic : null;
@@ -161,58 +156,82 @@ function initMap() {
             }
         });
         
-        // Set up drag and drop handlers for the map to accept the dragged location icon
-        view.container.addEventListener('dragover', (event) => {
-            // Only accept if we're dragging the location icon
-            if (isDraggingLocationIcon) {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = 'copy';
-                view.container.style.opacity = '0.9';
+        // Long press (click and hold) handler for creating new entries
+        let longPressTimer = null;
+        let longPressStartPoint = null;
+        let longPressIndicator = null;
+        const LONG_PRESS_DURATION = 600; // milliseconds
+        const MOVE_THRESHOLD = 10; // pixels
+        
+        view.on('pointer-down', (event) => {
+            longPressStartPoint = { x: event.x, y: event.y, mapPoint: event.mapPoint };
+            
+            // Create visual indicator
+            longPressIndicator = document.createElement('div');
+            longPressIndicator.className = 'long-press-indicator';
+            longPressIndicator.style.left = event.x + 'px';
+            longPressIndicator.style.top = event.y + 'px';
+            view.container.appendChild(longPressIndicator);
+            
+            longPressTimer = setTimeout(() => {
+                // Long press triggered - create new entry
+                if (longPressIndicator) {
+                    longPressIndicator.remove();
+                    longPressIndicator = null;
+                }
+                
+                if (isGuestMode && !guestEntryWarningShown) {
+                    alert('Guest mode note: diary entries are stored temporarily and will be deleted if you refresh the page.');
+                    guestEntryWarningShown = true;
+                }
+                
+                currentClickCoords = {
+                    lat: roundCoord(longPressStartPoint.mapPoint.latitude),
+                    lon: roundCoord(longPressStartPoint.mapPoint.longitude),
+                    mapPoint: longPressStartPoint.mapPoint
+                };
+                
+                const pointRecord = getOrCreatePointRecord(currentClickCoords);
+                openEntryModal('new', pointRecord, null);
+                
+                // Clear the timer so pointer-up doesn't do anything
+                longPressTimer = null;
+                longPressStartPoint = null;
+            }, LONG_PRESS_DURATION);
+        });
+        
+        view.on('pointer-move', (event) => {
+            // Cancel long press if user moves too much
+            if (longPressTimer && longPressStartPoint) {
+                const dx = event.x - longPressStartPoint.x;
+                const dy = event.y - longPressStartPoint.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > MOVE_THRESHOLD) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                    longPressStartPoint = null;
+                    
+                    if (longPressIndicator) {
+                        longPressIndicator.remove();
+                        longPressIndicator = null;
+                    }
+                }
             }
         });
         
-        view.container.addEventListener('dragleave', (event) => {
-            if (isDraggingLocationIcon && event.target === view.container) {
-                view.container.style.opacity = '1';
-            }
-        });
-        
-        view.container.addEventListener('drop', async (event) => {
-            if (!isDraggingLocationIcon) {
-                return;
+        view.on('pointer-up', (event) => {
+            // Cancel long press on release
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+                longPressStartPoint = null;
             }
             
-            event.preventDefault();
-            view.container.style.opacity = '1';
-            isDraggingLocationIcon = false;
-            
-            // Get the map point at the drop location
-            // Need to calculate position relative to the view container, not the viewport
-            const rect = view.container.getBoundingClientRect();
-            const mapPoint = view.toMap({
-                x: event.clientX - rect.left,
-                y: event.clientY - rect.top
-            });
-            
-            if (!mapPoint) {
-                return;
+            if (longPressIndicator) {
+                longPressIndicator.remove();
+                longPressIndicator = null;
             }
-            
-            // Show guest mode warning if applicable
-            if (isGuestMode && !guestEntryWarningShown) {
-                alert('Guest mode note: diary entries are stored temporarily and will be deleted if you refresh the page.');
-                guestEntryWarningShown = true;
-            }
-            
-            // Create a new entry at the drop location
-            currentClickCoords = {
-                lat: roundCoord(mapPoint.latitude),
-                lon: roundCoord(mapPoint.longitude),
-                mapPoint: mapPoint
-            };
-            
-            const pointRecord = getOrCreatePointRecord(currentClickCoords);
-            openEntryModal('new', pointRecord, null);
         });
     });
 }

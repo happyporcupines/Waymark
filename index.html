@@ -27,10 +27,6 @@
     <header class="app-header">
         <h2>Waymark 🖤</h2>
         <div style="display: flex; align-items: center; gap: 15px;">
-            <div id="dragLocationIconContainer" class="drag-location-container">
-                <span class="drag-location-icon" id="dragLocationIcon" draggable="true">📍</span>
-                <span class="drag-location-label">Drag to add entry</span>
-            </div>
             <button id="storiesBtn" type="button" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">My Stories 🗺️</button>
             <div id="userInfo">Not Logged In</div>
         </div>
@@ -48,7 +44,7 @@
         <!-- Main map container -->
         <div class="map-container">
             <div id="viewDiv"></div>
-            <div class="map-hint">Click entries to select them, or drag the location icon from the header to add a new entry</div>
+            <div class="map-hint">Click entries to select them, or click and hold on the map to add a new entry</div>
         </div>
         <!-- Detail panel for viewing entries -->
         <aside id="entryDetailPanel" class="entry-detail-panel">
