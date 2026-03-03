@@ -1,0 +1,36 @@
+// Utility Functions
+
+// Rounds coordinates to 3 decimal places for consistent point keys
+function roundCoord(value) {
+    return Math.round(value * 1000) / 1000;
+}
+
+// Builds a unique key for a point based on its rounded latitude and longitude
+function buildPointKey(lat, lon) {
+    return `${roundCoord(lat)},${roundCoord(lon)}`;
+}
+
+// Converts HTML content to plain text for previews and storage
+function htmlToText(html) {
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    return (temp.textContent || '').trim();
+}
+
+// Truncates text to a specified length and adds ellipsis if needed
+function truncateText(text, maxLength = 180) {
+    if (text.length <= maxLength) {
+        return text;
+    }
+    return `${text.slice(0, maxLength)}...`;
+}
+
+// Escapes HTML special characters to prevent injection in popups and lists
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}

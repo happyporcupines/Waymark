@@ -1,0 +1,130 @@
+// UI Management - Modals, Detail Panel, Sidebar
+
+// Opens the entry modal for creating a new entry or editing an existing one, pre-filling data if editing
+function openEntryModal(mode, pointRecord, entryToEdit) {
+    const titleInput = document.getElementById('entryTitle');
+    const editor = document.getElementById('entryEditor');
+    const modal = document.getElementById('entryModal');
+    const modalTitle = document.getElementById('entryModalTitle');
+    const imageInput = document.getElementById('entryImageInput');
+    const imagePreview = document.getElementById('imagePreview');
+    const removeImageBtn = document.getElementById('removeImageBtn');
+
+    currentPointKey = pointRecord.pointKey;
+    currentEditingEntryId = entryToEdit ? entryToEdit.id : null;
+    currentEntryImage = null;
+    
+    // Display the coordinates in the modal for context
+    document.getElementById('entryCoords').innerText = `Location: ${pointRecord.lat}, ${pointRecord.lon}`;
+    modalTitle.innerText = mode === 'edit' ? 'Edit Diary Entry ✏️' : 'New Diary Entry 📓';
+    
+    // If editing, pre-fill the title, editor, and image with the existing entry data; if creating new, clear the fields
+    if (entryToEdit) {
+        titleInput.value = entryToEdit.title;
+        editor.innerHTML = entryToEdit.textHtml;
+        
+        // Load existing image if present
+        if (entryToEdit.image) {
+            currentEntryImage = entryToEdit.image;
+            imagePreview.innerHTML = `<img src="${entryToEdit.image}" alt="Entry image" style="max-width: 200px; max-height: 200px; margin-top: 10px; border-radius: 4px;">`;
+            removeImageBtn.style.display = 'inline-block';
+        } else {
+            imagePreview.innerHTML = '';
+            removeImageBtn.style.display = 'none';
+        }
+    } else {
+        titleInput.value = '';
+        editor.innerHTML = '';
+        imagePreview.innerHTML = '';
+        removeImageBtn.style.display = 'none';
+    }
+    
+    // Reset file input
+    imageInput.value = '';
+
+    modal.style.display = 'flex';
+}
+
+// Closes the entry modal and resets the current editing state
+function closeEntryModal() {
+    document.getElementById('entryModal').style.display = 'none';
+    document.getElementById('entryTitle').value = '';
+    document.getElementById('entryEditor').innerHTML = '';
+    document.getElementById('imagePreview').innerHTML = '';
+    document.getElementById('entryImageInput').value = '';
+    currentEditingEntryId = null;
+    currentEntryImage = null;
+}
+
+// Updates the sidebar list of entries, showing a preview of each entry and its location
+function updateSidebarList() {
+    const listContainer = document.getElementById('entriesList');
+    listContainer.innerHTML = '';
+    // If there are no entries, show a friendly message encouraging the user to create one
+    if (journalEntries.length === 0) {
+        listContainer.innerHTML = '<p>No entries yet. Tap the map to create one!</p>';
+        return;
+    }
+    // For each entry in the journalEntries array, create a div that shows the title, 
+    // a truncated preview of the text, the coordinates, and an image thumbnail if available
+    // clicking on it will open the detail panel for that entry
+    journalEntries.forEach((entry) => {
+        const entryDiv = document.createElement('div');
+        entryDiv.style.borderBottom = '1px solid #ccc';
+        entryDiv.style.padding = '10px 0';
+        
+        let imageHtml = '';
+        if (entry.image) {
+            imageHtml = `<img src="${entry.image}" alt="Entry image" style="width: 100%; height: 80px; object-fit: cover; margin: 8px 0; border-radius: 4px;">`;
+        }
+        
+        entryDiv.innerHTML = `
+            <h4 style="margin: 0 0 5px 0; color: #a43855;">${entry.title}</h4>
+            ${imageHtml}
+            <p style="margin: 0; font-size: 0.9em;">${truncateText(entry.text, 120)}</p>
+            <small style="color: #666;">Lat: ${entry.lat}, Lon: ${entry.lon}</small>
+        `;
+        listContainer.appendChild(entryDiv);
+    });
+}
+
+// Opens the detail panel for a specific entry, showing the full text and location information
+function openDetailPanel(pointRecord, entry) {
+    const detailPanel = document.getElementById('entryDetailPanel');
+    document.getElementById('detailTitle').innerText = entry.title;
+    document.getElementById('detailMeta').innerText = `Location: ${pointRecord.lat}, ${pointRecord.lon}`;
+    
+    let detailHtml = '';
+    if (entry.image) {
+        detailHtml = `<img src="${entry.image}" alt="Entry image" style="width: 100%; max-height: 300px; object-fit: contain; margin-bottom: 15px; border-radius: 4px;">`;
+    }
+    detailHtml += entry.textHtml;
+    
+    document.getElementById('detailContent').innerHTML = detailHtml;
+    detailPanel.classList.add('active');
+}
+
+// Closes the entry detail panel
+function closeDetailPanel() {
+    document.getElementById('entryDetailPanel').classList.remove('active');
+}
+
+// Handles app entry (login or guest mode)
+function enterApp(userLabel, guestMode) {
+    isGuestMode = guestMode;
+    if (!isGuestMode) {
+        guestEntryWarningShown = false;
+    }
+    
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'flex';
+    document.getElementById('userInfo').innerText = userLabel;
+
+    document.getElementById('sidebar').classList.remove('active');
+    document.querySelector('.map-container').style.display = 'block';
+
+    if (!mapInitialized) {
+        initMap();
+        mapInitialized = true;
+    }
+}
