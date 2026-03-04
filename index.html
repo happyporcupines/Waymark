@@ -1,200 +1,246 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <!-- ============================================================
-       WAYMARK - Diary Map Application
-       Author: Brooke Fandrich
-       Description: A web app for recording diary entries on an 
-                   interactive map with storytelling features.
-       ============================================================ -->
-  
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Waymark - Diary Map</title>
-  
-  <!-- Load main stylesheet and script -->
-  <link rel="stylesheet" type="text/css" href="css/base.css">
-  <link rel="stylesheet" type="text/css" href="css/components.css">
-  <script type="text/javascript" src="js/main.js"></script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>My Map Diary</title>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.26/esri/themes/light/main.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Alice&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <!-- Main Application Container -->
-  <div id="mainApp" style="display: none;">
-    <!-- Top Navigation Bar -->
-    <div class="top-nav">
-      <h1>Waymark</h1>
-      <span id="userInfo">User</span>
+<!-- Login Screen -->
+<div id="loginScreen" class="overlay">
+    <div class="login-box">
+        <h2>Welcome to Waymark!</h2>
+        <p>Log in to save your memories.</p>
+        <label for="emailInput">Email</label>
+        <input type="email" id="emailInput" placeholder="Email" />
+        <label for="passwordInput">Password</label>
+        <input type="password" id="passwordInput" placeholder="Password" />
+        <button id="loginBtn" type="button">Log In / Sign Up</button>
+        <!-- guest button allows for user testing before login system backend is set up-->
+        <button id="guestBtn" type="button">No need to login (data will not be saved)</button>
     </div>
-    
-    <!-- Mobile Navigation Buttons -->
-    <div class="mobile-nav">
-      <button id="navMap">🗺️ Map</button>
-      <button id="navList">📝 Entries</button>
-      <button id="navProfile">👤 Profile</button>
-    </div>
-
-    <!-- Main Content Area: Map + Sidebar -->
-    <div class="main-container">
-      <!-- Map Container (ArcGIS Map) -->
-      <div class="map-container">
-        <div id="viewDiv"></div>
-        <div id="searchContainer"></div>
-      </div>
-
-      <!-- Sidebar: Entry List and Stories -->
-      <div id="sidebar">
-        <!-- Entry List Section -->
-        <div class="sidebar-section">
-          <h3>My Entries</h3>
-          <button id="storiesBtn">📖 Stories</button>
-          <div id="entriesList"></div>
+</div>
+<!-- Main App Container -->
+<div id="mainApp" class="app-container" style="display: none;">
+<!-- Webpage Header -->
+    <header class="app-header">
+        <h2>Waymark</h2>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <button id="storiesBtn" type="button" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">My Stories 🗺️</button>
+            <div id="userInfo">Not Logged In</div>
         </div>
-      </div>
-
-      <!-- Entry Detail Panel (Read-only view) -->
-      <div id="entryDetailPanel" class="detail-panel">
-        <button id="closeDetailBtn">✕ Close</button>
-        <h2 id="detailTitle"></h2>
-        <small id="detailMeta"></small>
-        <div id="detailContent"></div>
-      </div>
-    </div>
-
-    <!-- Entry Editor Modal -->
-    <div id="entryModal" class="modal">
-      <div class="modal-content">
-        <h2 id="entryModalTitle">New Entry</h2>
-        <p id="entryCoords"></p>
-        
-        <!-- Entry Form Fields -->
-        <input id="entryTitle" type="text" placeholder="Entry Title">
-        <input id="entryDate" type="datetime-local">
-        
-        <!-- Text Editor with Formatting Buttons -->
-        <div class="editor-toolbar">
-          <button class="editor-btn" data-cmd="bold" title="Bold">B</button>
-          <button class="editor-btn" data-cmd="italic" title="Italic">I</button>
-          <button class="editor-btn" data-cmd="createLink" title="Link">🔗</button>
-          <button class="editor-btn" data-cmd="insertUnorderedList" title="Bullet List">•</button>
-          <button class="editor-btn" data-cmd="alphaList" title="Numbered List">1.</button>
-          <button class="editor-btn" data-cmd="checkList" title="Checklist">☐</button>
+    </header>
+<!-- Main App Body -->
+    <div class="app-body">
+        <!-- Sidebar for entries list -->
+        <aside id="sidebar" class="sidebar">
+            <div id="searchContainer"></div>
+            <h3>My Journal Entries</h3>
+            <div id="entriesList">
+                <p>No entries yet. Tap the map to create one!</p>
+            </div>
+        </aside>
+        <!-- Main map container -->
+        <div class="map-container">
+            <div id="viewDiv"></div>
+            <div class="map-hint">Tap entries to select them, or long-press (800ms) on the map to add a new entry</div>
         </div>
-        <div id="entryEditor" class="editor-content" contenteditable="true"></div>
-        
-        <!-- Image Upload -->
-        <label for="entryImageInput">📷 Add Image:</label>
-        <input id="entryImageInput" type="file" accept="image/*">
-        <button id="removeImageBtn" style="display: none;">Remove Image</button>
-        <div id="imagePreview"></div>
-        
-        <!-- Modal Buttons -->
-        <button id="saveEntryBtn" class="btn-primary">Save Entry</button>
-        <button id="cancelEntryBtn">Cancel</button>
-      </div>
+        <!-- Detail panel for viewing entries -->
+        <aside id="entryDetailPanel" class="entry-detail-panel">
+            <div class="entry-detail-header">
+                <h3 id="detailTitle">Entry</h3>
+                <button id="closeDetailBtn" type="button">Close</button>
+            </div>
+            <p id="detailMeta" class="entry-detail-meta"></p>
+            <div id="detailContent" class="entry-detail-content"></div>
+        </aside>
     </div>
+    <!-- Mobile navigation -->
+    <nav class="mobile-nav">
+        <button id="navMap" type="button">Map</button>
+        <button id="navList" type="button">Entries</button>
+        <button id="navProfile" type="button">Profile</button>
+    </nav>
 
-    <!-- Stories Modal -->
-    <div id="storiesModal" class="modal">
-      <div class="modal-content">
-        <button id="closeStoriesBtn">✕ Close</button>
-        <h2>My Stories</h2>
-        <button id="createNewStoryBtn">+ New Story</button>
-        <div id="storiesList"></div>
-      </div>
-    </div>
+</div>
+<!-- Modal for creating/editing entries -->
+<div id="entryModal" class="overlay" style="display: none;">
+    <div class="entry-modal-box">
+        <h3 id="entryModalTitle">New Diary Entry 📓</h3>
+        <p id="entryCoords" class="entry-coords"></p>
 
-    <!-- Story Editor Modal -->
-    <div id="storyEditModal" class="modal">
-      <div class="modal-content">
-        <h2>Edit Story</h2>
-        <input id="storyTitleInput" type="text" placeholder="Story Title">
+        <label for="entryTitle">Entry Title</label>
+        <input type="text" id="entryTitle" placeholder="Entry Title" />
         
-        <!-- Color Picker Controls -->
-        <label>Line Color:</label>
-        <button id="openColorPickerBtn">Open Color Picker</button>
-        <div id="colorPreview" style="width: 30px; height: 30px; background: #a43855; border-radius: 4px; cursor: pointer;"></div>
-        <input id="colorHexInput" type="text" placeholder="#a43855">
-        <input id="storyLineColor" type="hidden">
-        
-        <!-- Quick Color Presets -->
+        <!-- Date picker section -->
         <div style="margin: 10px 0;">
-          <button class="quick-color-btn" data-color="#a43855">◆ Red</button>
-          <button class="quick-color-btn" data-color="#d4af37">◆ Gold</button>
-          <button class="quick-color-btn" data-color="#2e8b57">◆ Green</button>
-          <button class="quick-color-btn" data-color="#4169e1">◆ Blue</button>
+            <label for="entryDate" style="display: block; margin-bottom: 5px; font-weight: bold;">📅 Date & Time:</label>
+            <input type="datetime-local" id="entryDate" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 1em;" />
         </div>
         
-        <!-- Available & Selected Entries Lists -->
-        <h4>Available Entries:</h4>
-        <div id="availableEntriesList"></div>
-        
-        <h4>Story Sequence (drag to reorder):</h4>
-        <ol id="storyEntriesList"></ol>
-        
-        <!-- Modal Buttons -->
-        <button id="saveStoryBtn" class="btn-primary">Save Story</button>
-        <button id="cancelStoryBtn">Cancel</button>
-      </div>
+        <!-- Image upload section -->
+        <div class="image-upload-section">
+            <label for="entryImageInput">📸 Add Photo (JPG or PNG):</label>
+            <input type="file" id="entryImageInput" accept="image/jpeg,image/png" />
+            <div id="imagePreview" class="image-preview"></div>
+            <button id="removeImageBtn" type="button" class="remove-image-btn" style="display: none;">Remove Image</button>
+        </div>
+
+        <!-- Toolbar for rich text editing -->
+        <div class="editor-toolbar">
+            <button type="button" class="editor-btn" data-cmd="bold">B</button>
+            <button type="button" class="editor-btn" data-cmd="italic">I</button>
+            <button type="button" class="editor-btn" data-cmd="underline">U</button>
+            <button type="button" class="editor-btn" data-cmd="strikeThrough">S</button>
+            <button type="button" class="editor-btn" data-cmd="insertUnorderedList">• List</button>
+            <button type="button" class="editor-btn" data-cmd="insertOrderedList">123</button>
+            <button type="button" class="editor-btn" data-cmd="alphaList">ABC</button>
+            <button type="button" class="editor-btn" data-cmd="checkList">☑</button>
+            <button type="button" class="editor-btn" data-cmd="indent">Indent</button>
+            <button type="button" class="editor-btn" data-cmd="outdent">Outdent</button>
+        </div>
+    
+        <div id="entryEditor" class="entry-editor" contenteditable="true"></div>
+        <!-- Save and Cancel buttons -->
+        <div class="entry-modal-actions">
+            <button id="saveEntryBtn" type="button" class="save-btn">Save</button>
+            <button id="cancelEntryBtn" type="button" class="cancel-btn">Cancel</button>
+        </div>
     </div>
-
-    <!-- Color Picker Modal -->
-    <div id="colorPickerModal" class="modal">
-      <div class="modal-content">
-        <h2>Pick a Color</h2>
-        <div id="colorPreviewLarge" style="width: 100%; height: 100px; border-radius: 4px; background: #a43855; margin-bottom: 15px;"></div>
-        <label>Hue:</label>
-        <input id="hueSlider" type="range" min="0" max="360" value="341" style="width: 100%;">
-        <label>Saturation:</label>
-        <input id="satSlider" type="range" min="0" max="100" value="67" style="width: 100%;">
-        <label>Lightness:</label>
-        <input id="lightSlider" type="range" min="0" max="100" value="40" style="width: 100%;">
-        <input id="colorHexInputModal" type="text" placeholder="#a43855">
-        <button id="applyColorBtn" class="btn-primary">Apply</button>
-        <button id="cancelColorBtn">Cancel</button>
-      </div>
+</div>
+<!-- Modal for managing stories -->
+<div id="storiesModal" class="overlay" style="display: none; z-index: 105;">
+    <div class="entry-modal-box" style="width: 95vw; max-width: 600px; max-height: 90vh;">
+        <h3 style="margin-top: 0; color: #a43855;">My Stories</h3>
+        <div id="storiesList" style="flex: 1; overflow-y: auto; margin-bottom: 15px;"></div>
+        <div class="entry-modal-actions">
+            <button id="createNewStoryBtn" type="button" class="save-btn">Create New Story</button>
+            <button id="closeStoriesBtn" type="button" class="cancel-btn">Close</button>
+        </div>
     </div>
-  </div>
-
-  <!-- Login Screen (shown first) -->
-  <div id="loginScreen" class="login-container">
-    <h1>🗺️ Waymark</h1>
-    <p>Track your journey, one memory at a time.</p>
-    <input id="emailInput" type="email" placeholder="Your email">
-    <button id="loginBtn" class="btn-primary">Login</button>
-    <button id="guestBtn">Guest Mode</button>
-  </div>
-
-  <!-- ============================================================
-       Load JavaScript Modules
-       Each module handles a specific feature of the application.
-       The modules are loaded in this order to ensure proper initialization.
-       ============================================================ -->
-  
-  <!-- Utility functions and helpers -->
-  <script src="js/utils.js"></script>
-  
-  <!-- Global application state -->
-  <script src="js/state.js"></script>
-  
-  <!-- Entry creation and management -->
-  <script src="js/entries.js"></script>
-  
-  <!-- Map initialization and graphics handling -->
-  <script src="js/map.js"></script>
-  
-  <!-- Popup and point graphic management -->
-  <script src="js/popups.js"></script>
-  
-  <!-- Story/journey creation and management -->
-  <script src="js/stories.js"></script>
-  
-  <!-- UI modals and detail panels -->
-  <script src="js/ui.js"></script>
-  
-  <!-- Event listeners and handlers -->
-  <script src="js/eventHandlers.js"></script>
-  
-  <!-- ArcGIS API (for mapping functionality) -->
-  <script src="https://js.arcgis.com/4.28/"></script>
+</div>
+<!-- Modal for editing a specific story -->
+<div id="storyEditModal" class="overlay" style="display: none; z-index: 110;">
+    <div class="entry-modal-box" style="width: 95vw;">
+        <!-- Story title input and instructions -->
+        <h3 id="storyEditTitle" style="margin-top: 0; color: #a43855;">Story Editor</h3>
+        <label for="storyTitleInput">Story Title</label>
+        <input type="text" id="storyTitleInput" placeholder="Give your story a title..." style="width: 95%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; -webkit-appearance: none; appearance: none;" />
+        
+        <!-- Color Picker Section -->
+        <div style="margin-bottom: 15px;">
+            <label style="font-weight: bold; display: block; margin-bottom: 8px;">Line Color:</label>
+            
+            <!-- Quick color presets -->
+            <div style="display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap;">
+                <button type="button" class="quick-color-btn" data-color="#a43855" style="width: 35px; height: 35px; background: #a43855; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+                <button type="button" class="quick-color-btn" data-color="#ff1493" style="width: 35px; height: 35px; background: #ff1493; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+                <button type="button" class="quick-color-btn" data-color="#ff6b00" style="width: 35px; height: 35px; background: #ff6b00; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+                <button type="button" class="quick-color-btn" data-color="#ffff00" style="width: 35px; height: 35px; background: #ffff00; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+                <button type="button" class="quick-color-btn" data-color="#00ff00" style="width: 35px; height: 35px; background: #00ff00; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+                <button type="button" class="quick-color-btn" data-color="#00bfff" style="width: 35px; height: 35px; background: #00bfff; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+                <button type="button" class="quick-color-btn" data-color="#9370db" style="width: 35px; height: 35px; background: #9370db; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+                <button type="button" class="quick-color-btn" data-color="#000000" style="width: 35px; height: 35px; background: #000000; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+            </div>
+            
+            <!-- Compact controls with preview, hex input, and customize button -->
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <div id="colorPreview" style="width: 50px; height: 40px; border: 2px solid #666; border-radius: 4px; background-color: #a43855; cursor: pointer;" title="Click to customize color"></div>
+                <input type="text" id="colorHexInput" value="#a43855" maxlength="7" style="width: 80px; padding: 8px; font-family: monospace; text-transform: uppercase; border: 1px solid #ccc; border-radius: 4px;" placeholder="#000000" />
+                <button type="button" id="openColorPickerBtn" style="padding: 8px 12px; background: #a43855; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">More Colors...</button>
+                <input type="color" id="storyLineColor" value="#a43855" style="display: none;" />
+            </div>
+        </div>
+        
+        <p style="font-size: 0.85em; color: #666;">Drag and drop the entries on the right to reorder your journey.</p>
+        <!-- Two columns: available entries and story order (stacks on mobile) -->
+        <div style="display: flex; gap: 20px; flex: 1; overflow: hidden; flex-direction: column;">
+            <div style="flex: 1; display: flex; flex-direction: column;">
+                <h4 style="margin-top: 0; margin-bottom: 8px;">Available Entries</h4>
+                <!-- Drag and drop container for available entries -->
+                <div id="availableEntriesList" class="story-drag-container"></div>
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column;">
+                <h4 style="margin-top: 0; margin-bottom: 8px;">Story Order</h4>
+                <!-- Drag and drop container for story order -->
+                <ul id="storyEntriesList" class="story-drag-container" style="list-style: none; margin: 0;"></ul>
+            </div>
+        </div>
+        <!-- Save and Cancel buttons -->
+        <div class="entry-modal-actions">
+            <button id="saveStoryBtn" type="button" class="save-btn">Save Story</button>
+            <button id="cancelStoryBtn" type="button" class="cancel-btn">Cancel</button>
+        </div>
+    </div>
+</div>
+<!-- Custom Color Picker Modal -->
+<div id="colorPickerModal" class="overlay" style="display: none; z-index: 115;">
+    <div class="entry-modal-box" style="width: 95vw; max-width: 450px;">
+        <h3 style="margin-top: 0; color: #a43855;">Choose Your Color</h3>
+        
+        <!-- Quick color presets -->
+        <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center;">
+            <button type="button" class="quick-color-btn" data-color="#a43855" style="width: 40px; height: 40px; background: #a43855; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+            <button type="button" class="quick-color-btn" data-color="#ff1493" style="width: 40px; height: 40px; background: #ff1493; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+            <button type="button" class="quick-color-btn" data-color="#ff6b00" style="width: 40px; height: 40px; background: #ff6b00; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+            <button type="button" class="quick-color-btn" data-color="#ffff00" style="width: 40px; height: 40px; background: #ffff00; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+            <button type="button" class="quick-color-btn" data-color="#00ff00" style="width: 40px; height: 40px; background: #00ff00; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+            <button type="button" class="quick-color-btn" data-color="#00bfff" style="width: 40px; height: 40px; background: #00bfff; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+            <button type="button" class="quick-color-btn" data-color="#9370db" style="width: 40px; height: 40px; background: #9370db; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+            <button type="button" class="quick-color-btn" data-color="#000000" style="width: 40px; height: 40px; background: #000000; border: 2px solid #ccc; border-radius: 4px; cursor: pointer;"></button>
+        </div>
+        
+        <!-- Hue slider with gradient -->
+        <div style="margin-bottom: 15px;">
+            <label style="font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 5px;">Hue</label>
+            <input type="range" id="hueSlider" min="0" max="360" value="341" 
+                style="width: 100%; height: 35px; -webkit-appearance: none; appearance: none; background: linear-gradient(to right, #ff0000 0%, #ffff00 16.67%, #00ff00 33.33%, #00ffff 50%, #0000ff 66.67%, #ff00ff 83.33%, #ff0000 100%); border-radius: 5px; outline: none;">
+        </div>
+        
+        <!-- Saturation slider with gradient -->
+        <div style="margin-bottom: 15px;">
+            <label style="font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 5px;">Saturation</label>
+            <input type="range" id="satSlider" min="0" max="100" value="67" 
+                style="width: 100%; height: 35px; -webkit-appearance: none; appearance: none; border-radius: 5px; outline: none;">
+        </div>
+        
+        <!-- Lightness slider with gradient -->
+        <div style="margin-bottom: 15px;">
+            <label style="font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 5px;">Lightness</label>
+            <input type="range" id="lightSlider" min="0" max="100" value="40" 
+                style="width: 100%; height: 35px; -webkit-appearance: none; appearance: none; border-radius: 5px; outline: none;">
+        </div>
+        
+        <!-- Color preview and hex input -->
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; justify-content: center;">
+            <div id="colorPreviewLarge" style="width: 100px; height: 60px; border: 3px solid #666; border-radius: 6px; background-color: #a43855;"></div>
+            <div>
+                <label style="font-size: 0.85em; display: block; margin-bottom: 3px;">Hex Code:</label>
+                <input type="text" id="colorHexInputModal" value="#a43855" maxlength="7" style="width: 90px; padding: 10px; font-family: monospace; font-size: 1.1em; text-transform: uppercase; border: 2px solid #ccc; border-radius: 4px; text-align: center;" placeholder="#000000" />
+            </div>
+        </div>
+        
+        <div class="entry-modal-actions">
+            <button id="applyColorBtn" type="button" class="save-btn">Apply Color</button>
+            <button id="cancelColorBtn" type="button" class="cancel-btn">Cancel</button>
+        </div>
+    </div>
+</div>
+<!-- Include ArcGIS API for JavaScript and custom app modules -->
+<script src="https://js.arcgis.com/4.26/"></script>
+<!-- App modules in dependency order -->
+<script src="js/state.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/entries.js"></script>
+<script src="js/popups.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/stories.js"></script>
+<script src="js/map.js"></script>
+<script src="js/eventHandlers.js"></script>
 </body>
 </html>

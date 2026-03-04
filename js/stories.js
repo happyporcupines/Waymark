@@ -1,38 +1,8 @@
-/**
- * ============================================================
- * STORY/JOURNEY MANAGEMENT
- * ============================================================
- * 
- * This module handles creation and management of "stories" -
- * journeys that connect multiple diary entries across locations.
- * 
- * Key Features:
- * - Create stories from selected entries
- * - Draw polylines connecting entry points
- * - Calculate total distance and segment distances
- * - Color customization for story lines
- * - Drag-and-drop entry reordering
- * 
- * DEPENDENCIES: state.js, utils.js, popups.js, eventHandlers.js
- * 
- * ============================================================
- */
+// Story/Journey Management
 
-// ============================================================
-// COLOR UTILITIES - Hex <-> RGBA Conversion
-// ============================================================
-
-/**
- * Converts hex color to RGBA array for ArcGIS symbol rendering.
- * 
- * @param {string} hex - Hex color code (e.g., "#a43855")
- * @param {number} alpha - Alpha value 0-1 (default 0.95)
- * @returns {[number, number, number, number]} RGBA array
- * 
- * EXAMPLE: hexToRgba("#a43855", 0.95) => [164, 56, 85, 0.95]
- */
+// Helper function to convert hex color to RGBA array
 function hexToRgba(hex, alpha = 0.95) {
-    // Normalize hex input
+    // Ensure hex is a string and starts with #
     if (!hex || typeof hex !== 'string') {
         hex = '#a43855';  // Default color
     }
@@ -45,62 +15,51 @@ function hexToRgba(hex, alpha = 0.95) {
         const g = parseInt(hex.slice(3, 5), 16);
         const b = parseInt(hex.slice(5, 7), 16);
         
-        // Validate parsed values
+        // Validate the parsed values
         if (isNaN(r) || isNaN(g) || isNaN(b)) {
-            return [164, 56, 85, alpha];  // Return default on error
+            return [164, 56, 85, alpha];  // Return default color if parsing failed
         }
         return [r, g, b, alpha];
     } catch (e) {
-        return [164, 56, 85, alpha];  // Return default on error
+        return [164, 56, 85, alpha];  // Return default color on error
     }
 }
 
-
-// ============================================================
-// STORY MODAL MANAGEMENT
-// ============================================================
-
-/**
- * Opens the stories modal showing all user stories.
- * Displays story info (color, mileage, entry count) and action buttons.
- */
+// Opens the stories modal showing all stories and options to create, edit, or manage them
 function openStoriesModal() {
     const listContainer = document.getElementById('storiesList');
     listContainer.innerHTML = '';
-    
-    // Show message if no stories
     if (stories.length === 0) {
         listContainer.innerHTML = '<p>No stories yet. Create one!</p>';
     } else {
-        // Create list item for each story
         stories.forEach(story => {
             const div = document.createElement('div');
             div.className = 'story-list-item';
             
-            // Normalize story color
+            // Ensure lineColor is a valid hex color
             let lineColor = story.lineColor || '#a43855';
             lineColor = lineColor.trim();
             if (!lineColor.startsWith('#')) {
                 lineColor = '#' + lineColor;
             }
             
-            // Create color swatch
+            // Create the color swatch element
             const colorSwatch = document.createElement('div');
             colorSwatch.style.width = '20px';
             colorSwatch.style.height = '20px';
-            colorSwatch.style.backgroundColor = lineColor;
+            colorSwatch.style.backgroundColor = lineColor;  // Set directly via DOM
             colorSwatch.style.borderRadius = '3px';
             colorSwatch.style.border = '1px solid #ccc';
             
-            // Create content div with color and info
+            // Create the content container
             const contentDiv = document.createElement('div');
             contentDiv.style.display = 'flex';
             contentDiv.style.alignItems = 'center';
             contentDiv.style.gap = '10px';
             contentDiv.style.flex = '1';
+            
             contentDiv.appendChild(colorSwatch);
             
-            // Story title and stats
             const textDiv = document.createElement('div');
             textDiv.innerHTML = `
                 <strong>${escapeHtml(story.title)}</strong><br>
@@ -108,7 +67,7 @@ function openStoriesModal() {
             `;
             contentDiv.appendChild(textDiv);
             
-            // Action buttons
+            // Create the buttons container
             const buttonsDiv = document.createElement('div');
             buttonsDiv.innerHTML = `
                 <button class="story-btn-small toggle-story-vis-btn" data-id="${story.id}">${story.visible ? '👁️ Hide' : '👁️‍🗨️ Show'}</button>
@@ -120,17 +79,10 @@ function openStoriesModal() {
             listContainer.appendChild(div);
         });
     }
-    
     document.getElementById('storiesModal').style.display = 'flex';
 }
 
-
-/**
- * Opens the story editor modal for creating or editing a story.
- * Pre-fills data if editing, clears if creating new.
- * 
- * @param {number|null} storyId - Story ID if editing, null if creating
- */
+// Opens the story edit modal for creating a new story or editing an existing one, pre-filling data if editing
 function openStoryEditModal(storyId) {
     currentEditingStoryId = storyId;
     currentStoryEditEntries = [];
@@ -142,8 +94,6 @@ function openStoryEditModal(storyId) {
     }
 
     let colorValue = '#a43855';
-    
-    // Pre-fill if editing existing story
     if (storyId) {
         const story = stories.find(s => s.id === storyId);
         if (story) {
@@ -152,12 +102,11 @@ function openStoryEditModal(storyId) {
             currentStoryEditEntries = [...story.entryIds];
         }
     } else {
-        // Clear for new story
         titleInput.value = '';
         colorValue = '#a43855';
     }
     
-    // Apply color to picker
+    // Initialize color using the global function if available
     if (typeof applyColorToStory === 'function') {
         applyColorToStory(colorValue);
     }
@@ -167,27 +116,13 @@ function openStoryEditModal(storyId) {
     document.getElementById('storyEditModal').style.display = 'flex';
 }
 
-
-// ============================================================
-// STORY EDITOR - Entry Selection & Reordering
-// ============================================================
-
-/**
- * Renders the two lists in the story editor:
- * 1. Available entries (can be added to story)
- * 2. Selected entries (currently in story, draggable to reorder)
- * 
- * Story entries form a "journey" - when combined, they draw a line
- * connecting all the locations on the map.
- */
+// Renders the lists of available entries and selected entries in the story edit modal
 function renderStoryEditLists() {
     const availableList = document.getElementById('availableEntriesList');
     const selectedList = document.getElementById('storyEntriesList');
-    availableList.innerHTML = '';
-    selectedList.innerHTML = '';
+    availableList.innerHTML = ''; selectedList.innerHTML = '';
 
-    // Identify which points are locked in other stories
-    // A point is locked if it has entries in a different story
+    // Lock points: If a point is in a different story, none of its entries can be used!
     const lockedPointKeys = new Set();
     stories.forEach(s => {
         if (s.id !== currentEditingStoryId) {
@@ -197,13 +132,11 @@ function renderStoryEditLists() {
             });
         }
     });
-    
-    // Categorize each journal entry
+    // For each journal entry, determine if it's selected for the current story, if it's locked due to being in another story, or if it's available to be added.
     journalEntries.forEach(entry => {
         const isLocked = lockedPointKeys.has(buildPointKey(entry.lat, entry.lon));
-        
         if (currentStoryEditEntries.includes(entry.id)) {
-            // Entry is selected - put in right list with drag handle
+            // It's selected, draw it in the drag and drop list
             const li = document.createElement('li');
             li.className = 'draggable-item';
             li.setAttribute('draggable', 'true');
@@ -211,7 +144,7 @@ function renderStoryEditLists() {
             li.innerHTML = `<span>☰ ${escapeHtml(entry.title)}</span><button class="story-btn-small remove-from-story-btn" data-id="${entry.id}">X</button>`;
             selectedList.appendChild(li);
         } else if (!isLocked) {
-            // Entry is available - put in left list with add button
+            // It's available
             const div = document.createElement('div');
             div.className = 'draggable-item';
             div.innerHTML = `<span>${escapeHtml(entry.title)}</span><button class="story-btn-small add-to-story-btn" data-id="${entry.id}">Add</button>`;
@@ -220,116 +153,66 @@ function renderStoryEditLists() {
     });
 }
 
-
-/**
- * Adds an entry to the current story being edited.
- * 
- * @param {number} entryId - The entry to add
- */
+// Adds an entry to the current story being edited by its ID, and then re-renders the lists to reflect the change
 function moveEntryToStory(entryId) { 
     currentStoryEditEntries.push(entryId); 
     renderStoryEditLists(); 
 }
 
-
-/**
- * Removes an entry from the current story being edited.
- * 
- * @param {number} entryId - The entry to remove
- */
+// Removes an entry from the current story being edited by its ID
 function removeEntryFromStory(entryId) { 
     currentStoryEditEntries = currentStoryEditEntries.filter(id => id !== entryId); 
     renderStoryEditLists(); 
 }
 
-
-// ============================================================
-// STORY SAVING & GRAPHICS UPDATE
-// ============================================================
-
-/**
- * Saves the current story being edited.
- * Creates new story or updates existing one.
- * Validates that story has at least 2 entries.
- * Updates map graphics with polyline and distance calculations.
- */
+// Saves the current story being edited, creating or updating it with the selected entries and title
 function saveStory() {
     const title = document.getElementById('storyTitleInput').value.trim();
     const colorInput = document.getElementById('colorHexInput') || document.getElementById('storyLineColor');
     const colorHex = colorInput ? colorInput.value : '#a43855';
-    
-    // Validate title
-    if (!title) {
-        alert("Give your story a title!");
-        return;
-    }
+    if (!title) { alert("Give your story a title!"); return; }
 
-    // Get entry order from DOM (respects user's drag-and-drop reordering)
+    // Grab the actual DOM order from the dragged list
     const listItems = document.querySelectorAll('#storyEntriesList li');
     const orderedEntryIds = Array.from(listItems).map(li => parseInt(li.getAttribute('data-id'), 10));
-    
-    // Validate minimum 2 entries for line
-    if (orderedEntryIds.length < 2) {
-        alert("A story must have at least 2 entries to draw a line! 🖤");
-        return;
-    }
-    
-    // Create or update story
+    // Validate that there are at least 2 entries in the story
+    if (orderedEntryIds.length < 2) { alert("A story must have at least 2 entries to draw a line! 🖤"); return; }
+    // If we're editing an existing story, update its title, entryIds, and line color
+    // If we're creating a new story, create it with the provided title, entryIds, and line color
     let story;
     if (currentEditingStoryId) {
-        // Update existing story
         story = stories.find(s => s.id === currentEditingStoryId);
-        if (!story) return;
+        if (!story) return;  // Safety check
         story.title = title;
         story.entryIds = orderedEntryIds;
         story.lineColor = colorHex;
     } else {
-        // Create new story
         story = {
             id: nextStoryId++, 
             title, 
             entryIds: orderedEntryIds, 
             visible: true, 
             totalMiles: 0, 
-            graphicsLayer: new GraphicsLayerCtor(),  // Create new layer for this story
+            graphicsLayer: new GraphicsLayerCtor(), 
             lineColor: colorHex
         };
         mapInstance.add(story.graphicsLayer);
         stories.push(story);
     }
-    
-    // Update map graphics (draw line, calculate distances)
+    // After saving the story, we need to update the graphics on the map to reflect the new story composition
     updateStoryMapGraphics(story);
-    
-    // Close modals and refresh view
     document.getElementById('storyEditModal').style.display = 'none';
     openStoriesModal();
 }
 
-
-/**
- * Updates map graphics for a story: draws polyline and calculates distances.
- * 
- * @param {Object} story - Story to update
- * 
- * Handles:
- * - Converting ordered entry IDs to map coordinates
- * - Drawing polyline connecting all points
- * - Calculating total journey distance
- * - Calculating segment distances (entry to entry)
- * - Attaching distance info to entries for popup display
- * - Updating graphics layer visibility
- */
+// Updates the map graphics for a story, including drawing the connecting line and calculating mileage
 function updateStoryMapGraphics(story) {
-    // Clear old graphics from layer
     story.graphicsLayer.removeAll();
-    
     const orderedMapPoints = [];
     const storyEntries = [];
     const affectedPointKeys = new Set();
     story.totalMiles = 0;
-    
-    // Gather map points and entries in order
+    //
     story.entryIds.forEach(eid => {
         const entry = journalEntries.find(je => je.id === eid);
         if (entry) {
@@ -343,35 +226,26 @@ function updateStoryMapGraphics(story) {
         }
     });
 
-    let segmentMiles = [];
-    
-    // Draw line if we have at least 2 points and modules are loaded
+    // Draw Line & Calculate Math
+    let totalMiles = 0;
+    const segmentMiles = [];
+    // Only attempt to draw the line and calculate mileage if we have at least 2 points, and if the necessary ArcGIS modules are loaded
     if (orderedMapPoints.length >= 2 && PolylineCtor && geometryEngineModule) {
-        // Create polyline from ordered points
         const spatialReference = orderedMapPoints[0].spatialReference || { wkid: 4326 };
         const path = orderedMapPoints.map((point) => [point.x, point.y]);
         const polyline = new PolylineCtor({ paths: [path], spatialReference });
-        
-        // Calculate total distance
-        story.totalMiles = geometryEngineModule.geodesicLength(polyline, "miles");
-        story.totalMiles = Number.isFinite(story.totalMiles) ? story.totalMiles : 0;
+        totalMiles = geometryEngineModule.geodesicLength(polyline, "miles");
+        story.totalMiles = Number.isFinite(totalMiles) ? totalMiles : 0;
 
-        // Create and add line graphic
         const lineGraphic = new GraphicCtor({
             geometry: polyline,
-            symbol: { 
-                type: "simple-line", 
-                color: hexToRgba(story.lineColor || '#a43855'), 
-                width: 4, 
-                style: "solid" 
-            }
+            symbol: { type: "simple-line", color: hexToRgba(story.lineColor || '#a43855'), width: 4, style: "solid" }
         });
         story.graphicsLayer.add(lineGraphic);
 
-        // Calculate distance for each segment
+        // Get segment distances
         for (let i = 0; i < orderedMapPoints.length; i++) {
             let distFromPrev = 0, distToNext = 0;
-            
             if (i > 0) {
                 const prevToCurrent = new PolylineCtor({
                     paths: [[[orderedMapPoints[i - 1].x, orderedMapPoints[i - 1].y], [orderedMapPoints[i].x, orderedMapPoints[i].y]]],
@@ -386,7 +260,6 @@ function updateStoryMapGraphics(story) {
                 });
                 distToNext = geometryEngineModule.geodesicLength(currentToNext, "miles");
             }
-            
             segmentMiles.push({
                 distFromPrev: Number.isFinite(distFromPrev) ? distFromPrev : 0,
                 distToNext: Number.isFinite(distToNext) ? distToNext : 0
@@ -394,12 +267,11 @@ function updateStoryMapGraphics(story) {
         }
     }
 
-    // Pad segment miles array if needed
     while (segmentMiles.length < storyEntries.length) {
         segmentMiles.push({ distFromPrev: 0, distToNext: 0 });
     }
 
-    // Clear distance data from entries not in any story
+    // Clear stale distance data from entries that are not in any story.
     const allStoryEntryIds = new Set();
     stories.forEach((storyItem) => {
         storyItem.entryIds.forEach((entryId) => allStoryEntryIds.add(entryId));
@@ -418,7 +290,7 @@ function updateStoryMapGraphics(story) {
         });
     });
 
-    // Attach distance info to entries for popup display
+    // Attach mileage to both journal and point-store entries so popups/detail panels can always read it.
     storyEntries.forEach((entry, idx) => {
         const mileageInfo = segmentMiles[idx] || { distFromPrev: 0, distToNext: 0 };
         entry.storyDistanceInfo = mileageInfo;
@@ -430,8 +302,9 @@ function updateStoryMapGraphics(story) {
             }
         });
     });
-    
-    // Update graphics for affected points
+    // Now that we've updated the story's graphics layer with the line and calculated the mileage info for each entry, 
+    // we need to update only the graphics for points affected by this story change
+    // to reflect any changes in story association or popup content
     affectedPointKeys.forEach((pointKey) => {
         const pointRecord = pointStore.get(pointKey);
         if (pointRecord && pointRecord.graphic) {
@@ -440,12 +313,7 @@ function updateStoryMapGraphics(story) {
     });
 }
 
-
-/**
- * Toggles visibility of a story's graphics on the map.
- * 
- * @param {number} storyId - Story to toggle
- */
+// Toggles the visibility of a story's graphics layer on the map
 function toggleStoryVisibility(storyId) {
     const story = stories.find(s => s.id === storyId);
     if (story) {
@@ -454,4 +322,3 @@ function toggleStoryVisibility(storyId) {
         openStoriesModal();
     }
 }
-
