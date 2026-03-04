@@ -68,6 +68,8 @@ input, textarea {
     text-align: left;
     max-height: 95vh;
     min-height: 50vh;
+    box-sizing: border-box;
+    overflow-y: auto;
 }
 
 .entry-modal-box h3 {
