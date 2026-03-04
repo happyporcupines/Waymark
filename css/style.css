@@ -66,8 +66,8 @@ input, textarea {
     display: flex;
     flex-direction: column;
     text-align: left;
-    max-height: 95vh;
-    min-height: 50vh;
+    max-height: 85vh;
+    min-height: auto;
     box-sizing: border-box;
     overflow-y: auto;
 }
@@ -129,6 +129,9 @@ input, textarea {
     max-height: 200px;
     margin-top: 10px;
     border-radius: 4px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
 }
 .remove-image-btn {
     background-color: #d9534f;
@@ -179,6 +182,8 @@ input, textarea {
     font-family: 'Lora', serif;
     -webkit-appearance: none;
     appearance: none;
+    min-height: 120px;
+    max-height: 300px;
 }
 /* Remove default focus outline and add a subtle border color change on focus */
 .entry-editor:focus {
@@ -558,8 +563,8 @@ input, textarea {
 
     .entry-modal-box {
         width: 98vw;
-        max-height: 95vh;
-        min-height: 50vh;
+        max-height: 85vh;
+        min-height: auto;
         padding: 12px;
     }
 
@@ -591,6 +596,48 @@ input, textarea {
         bottom: 60px;
         max-width: 200px;
         line-height: 1.3;
+    }
+
+    .image-upload-section {
+        margin: 8px 0;
+        padding: 8px;
+    }
+
+    .image-preview img {
+        max-width: 120px;
+        max-height: 120px;
+        margin-top: 6px;
+    }
+
+    .remove-image-btn {
+        padding: 4px 10px;
+        font-size: 0.85em;
+    }
+
+    .entry-editor {
+        min-height: 100px;
+        max-height: 200px;
+    }
+
+    #entryTitle {
+        padding: 8px;
+        margin-bottom: 8px;
+    }
+
+    .entry-coords {
+        margin: 0 0 8px 0;
+        font-size: 0.8em;
+    }
+
+    .entry-modal-box h3 {
+        margin-bottom: 8px;
+        font-size: 1.1em;
+    }
+
+    .overlay {
+        align-items: flex-start;
+        padding-top: 20px;
+        overflow-y: auto;
     }
 }
 /* STORYTELLING STYLES */
