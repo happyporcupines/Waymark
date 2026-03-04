@@ -73,7 +73,6 @@ function findStoryForEntry(entry) {
  * graphic.popupTemplate = template;
  */
 function buildEntryPopupTemplate(entry, pointStory = null) {
-function buildEntryPopupTemplate(entry, pointStory = null) {
     const preview = truncateText(entry.textPlain, 180);
     const resolvedStory = pointStory || findStoryForEntry(entry);
 
