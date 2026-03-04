@@ -1,25 +1,63 @@
-// Entry Management
+/**
+ * ============================================================
+ * ENTRY MANAGEMENT - Diary Entry Creation & Editing
+ * ============================================================
+ * 
+ * This module handles the creation, editing, and storage of
+ * diary entries. It manages:
+ * - Entry point records (groups of entries at same location)
+ * - Entry CRUD operations
+ * - Image attachment for entries
+ * - Guest mode persistence
+ * 
+ * DEPENDENCIES: state.js, utils.js
+ * 
+ * ============================================================
+ */
 
-// Track the current image being edited/uploaded
+/** Currently selected image data (base64) for entry being edited */
 let currentEntryImage = null;
 
-// Gets or creates a point record for tracking entries at a specific location
+
+/**
+ * Gets or creates a point record - a container for all entries at a location.
+ * Multiple entries can exist at the same point.
+ * 
+ * @param {Object} coords - Coordinate object with shape {lat, lon, mapPoint}
+ * @returns {Object} pointRecord with entries array and map graphic
+ * 
+ * EXAMPLE:
+ *   const point = getOrCreatePointRecord({lat: 35.126, lon: -106.644, mapPoint: arcgisPoint});
+ *   point.entries.push(newEntry);
+ */
 function getOrCreatePointRecord(coords) {
+    // Build unique key from rounded coordinates
     const pointKey = buildPointKey(coords.lat, coords.lon);
+    
+    // Return existing record if found
     if (!pointStore.has(pointKey)) {
+        // Create new point record structure
         pointStore.set(pointKey, {
             pointKey,
             lat: coords.lat,
             lon: coords.lon,
             mapPoint: coords.mapPoint,
-            entries: [],
-            graphic: null
+            entries: [],           // Array of entries at this location
+            graphic: null          // ArcGIS graphic shown on map
         });
     }
+    
     return pointStore.get(pointKey);
 }
 
-// Retrieves the latest entry for a point record, or null if there are no entries
+
+/**
+ * Gets the most recent entry at a point record.
+ * Used for displaying the latest info in popups and markers.
+ * 
+ * @param {Object} pointRecord - The point record to check
+ * @returns {Object|null} The latest entry or null if no entries exist
+ */
 function getLatestEntry(pointRecord) {
     if (!pointRecord || pointRecord.entries.length === 0) {
         return null;
@@ -27,13 +65,22 @@ function getLatestEntry(pointRecord) {
     return pointRecord.entries[pointRecord.entries.length - 1];
 }
 
-// When in guest mode, this function ensures that the journalEntries array is kept up to date with the latest entry data for each point
+
+/**
+ * In guest mode, keeps journalEntries array in sync with point store.
+ * Guest mode doesn't have a database, so we maintain a flat array
+ * that's used for the sidebar list.
+ * 
+ * @param {Object} entry - The entry that was saved
+ * @param {Object} pointRecord - The point record containing the entry
+ */
 function upsertGuestArrayEntry(entry, pointRecord) {
+    // Only do this in guest mode
     if (!isGuestMode) {
         return;
     }
-    // Check if an entry for this point already exists in the journalEntries array; if so, update it, otherwise add a new entry
-    const existingIndex = journalEntries.findIndex((item) => item.id === entry.id);
+    
+    // Create guest entry object with essential data
     const guestEntry = {
         id: entry.id,
         title: entry.title,
@@ -44,6 +91,8 @@ function upsertGuestArrayEntry(entry, pointRecord) {
         createdAt: entry.createdAt
     };
 
+    // Update existing entry or add new one
+    const existingIndex = journalEntries.findIndex((item) => item.id === entry.id);
     if (existingIndex >= 0) {
         journalEntries[existingIndex] = guestEntry;
     } else {
@@ -51,25 +100,35 @@ function upsertGuestArrayEntry(entry, pointRecord) {
     }
 }
 
-// Saves the current entry being edited or created, updating the point record, the map graphic, and the sidebar list accordingly
+
+/**
+ * Saves the current entry being edited or created.
+ * Updates point records, map graphics, sidebar, and guest array as needed.
+ * 
+ * This is the main save function called from the Save button in the modal.
+ * Handles validation, entry creation vs editing, and UI updates.
+ */
 function saveEntry() {
+    // Verify we have a valid point to save to
     if (!currentPointKey || !pointStore.has(currentPointKey)) {
         return;
     }
-    // Get the current point record based on the currentPointKey, and extract the title, text, and date from the modal inputs
+    
+    // Get the point record and form data
     const pointRecord = pointStore.get(currentPointKey);
     const title = document.getElementById('entryTitle').value.trim();
     const textHtml = document.getElementById('entryEditor').innerHTML.trim();
     const textPlain = htmlToText(textHtml);
     const dateValue = document.getElementById('entryDate').value;
     const createdAt = dateValue ? datetimeLocalToTimestamp(dateValue) : Date.now();
-    // Validate that both the title and the text are not empty; if either is empty, show an alert and do not save
+    
+    // Validate required fields
     if (!title || !textPlain) {
         alert("Don't be lazy, fill out both the title and your memory! 🖤");
         return;
     }
-    // If we're editing an existing entry, update its title, text, date, and image
-    // if we're creating a new entry, create it and add it to the point record's entries array
+    
+    // Handle editing existing entry
     if (currentEditingEntryId) {
         const editingEntry = pointRecord.entries.find((entry) => entry.id === currentEditingEntryId);
         if (editingEntry) {
@@ -81,6 +140,7 @@ function saveEntry() {
             upsertGuestArrayEntry(editingEntry, pointRecord);
         }
     } else {
+        // Creating new entry
         const newEntry = {
             id: nextEntryId++,
             title,
@@ -92,11 +152,13 @@ function saveEntry() {
         pointRecord.entries.push(newEntry);
         upsertGuestArrayEntry(newEntry, pointRecord);
     }
-    // After saving the entry, update the graphic for the point to reflect any changes
+    
+    // Update the map display and sidebar
     updatePointGraphic(pointRecord);
     updateSidebarList();
     closeEntryModal();
 }
+
 
 // When a user clicks on a point with multiple entries, this function helps determine which entry to show based on the selected entry ID from the popup
 // if no matching entry is found, it defaults to showing the latest entry for that point  

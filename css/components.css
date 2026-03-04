@@ -7,6 +7,10 @@ html, body {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
+    color-space: srgb;
+    -webkit-color-interpolation: srgb;
+    filter: none !important;
+    -webkit-filter: none !important;
 }
 
 /* Prevent text selection on buttons but allow in inputs */
@@ -722,10 +726,10 @@ p, small, span, div, button, input, textarea {
 .esri-popup__action:focus-visible,
 .esri-popup__action-text:focus-visible {
     text-shadow:
-        -0.5px -0.5px 0 #5b3a29,
-         0.5px -0.5px 0 #5b3a29,
-        -0.5px  0.5px 0 #5b3a29,
-         0.5px  0.5px 0 #5b3a29;
+        -1px -1px 0 #5b3a29,
+        1px -1px 0 #5b3a29,
+        -1px 1px 0 #5b3a29,
+        1px 1px 0 #5b3a29;
     text-decoration: underline;
     text-underline-offset: 2px;
 }
@@ -759,6 +763,11 @@ p, small, span, div, button, input, textarea {
 
 .quick-color-btn {
     transition: transform 0.1s, border-color 0.1s;
+    -webkit-appearance: none;
+    appearance: none;
+    color-space: srgb !important;
+    filter: none !important;
+    -webkit-filter: none !important;
 }
 
 .quick-color-btn:hover {
@@ -772,4 +781,13 @@ p, small, span, div, button, input, textarea {
 .quick-color-btn.selected {
     border-color: #000 !important;
     border-width: 3px !important;
+}
+
+/* Force color accuracy on color elements */
+#colorPreview,
+#colorPreviewLarge {
+    color-space: srgb !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    -webkit-color-interpolation: srgb !important;
 }

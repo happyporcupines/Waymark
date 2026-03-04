@@ -1,5 +1,34 @@
-// Map Initialization & Map Event Handlers
+/**
+ * ============================================================
+ * MAP INITIALIZATION & INTERACTIONS
+ * ============================================================
+ * 
+ * This module initializes the ArcGIS map and handles all
+ * map-related interactions:
+ * - Map setup and widget configuration
+ * - Click handling (single-click, long-press)
+ * - Popup action handling
+ * - Entry creation from map
+ * 
+ * DEPENDENCIES: state.js, entries.js, ui.js, popups.js
+ * 
+ * NOTE: ArcGIS API is loaded in index.html via <script> tag
+ * 
+ * ============================================================
+ */
 
+/**
+ * Initializes the ArcGIS map and sets up all interactions.
+ * This is called once when user logs in.
+ * 
+ * Sets up:
+ * - Map and MapView with graphics layer
+ * - Search widget (find locations)
+ * - Locate widget (go to current location)
+ * - Basemap gallery (switch map styles)
+ * - Click handlers (single-click, long-press)
+ * - Popup action listeners
+ */
 function initMap() {
     require([
         'esri/Map',
@@ -14,61 +43,84 @@ function initMap() {
         'esri/geometry/Polyline',
         'esri/geometry/geometryEngine'
     ], (Map, MapView, esriConfig, Search, Locate, BasemapGallery, Expand, Graphic, GraphicsLayer, Polyline, geometryEngine) => {
+        // ============================================================
+        // ARCGIS API CONFIGURATION
+        // ============================================================
+        
+        // API key for ArcGIS services
         esriConfig.apiKey = 'AAPTxy8BH1VEsoebNVZXo8HurP99AuF0u6hFXE5XsMHKuzBSGN5LvVSYilawxafx85hn9PCGXebaJHWlitVBT5zeCUaAyEvqj1BxcDK_zJC-tVX6YCERGHXEpZz6YEPcefm_vmXsNbePUUZ7JAXpHdXjsnh5x7OFNgUY22Xi2rwI6cYzTClvMoxyiN9hd4ig364gzmVxs5mLuQQYqSwxcO8eUnY8D8k0W9Tj3o-WFWbJGlMs42rjT9Cgf1AsZxwet7SYAT1_FDERp6GX';
 
+        // Save constructors globally for later use (story creation, graphics)
         GraphicCtor = Graphic;
-        GraphicsLayerCtor = GraphicsLayer; // Save this to make new layers for stories
-        PolylineCtor = Polyline;           // Save for drawing lines
-        geometryEngineModule = geometryEngine; // Save for calculating miles
+        GraphicsLayerCtor = GraphicsLayer;
+        PolylineCtor = Polyline;
+        geometryEngineModule = geometryEngine;
 
+        // Create graphics layer for displaying entry points
         appGraphicsLayer = new GraphicsLayer();
 
+        // Create the map
         const map = new Map({
             basemap: 'arcgis-midcentury',
             layers: [appGraphicsLayer]
         });
 
-        mapInstance = map; // Save globally for story layer additions
-        // Initialize the MapView with a default center and zoom level, and set the container to the 'viewDiv' element
+        // Save map globally for adding story layers
+        mapInstance = map;
+        
+        // Create map view with initial center (Santa Fe, NM) and zoom level
         const view = new MapView({
             map,
             center: [-106.644568, 35.126358],
             zoom: 9,
             container: 'viewDiv'
         });
-        // Disable the default popup behavior since we'll be managing popups manually based on our custom logic
+        
+        // Disable default popup so we can manage popups ourselves
         view.popup.autoOpenEnabled = false;
-        //
+        
+        // Save view globally for access from other modules
         appView = view;
-        // Add the Search widget to the top-right corner of the view, allowing users to search for locations on the map
+        
+        // ============================================================
+        // MAP WIDGETS - Search, Locate, Basemap Gallery
+        // ============================================================
+        
+        // Search widget: allows users to search for locations
         new Search({ view, container: 'searchContainer' });
-        // Add the Locate widget to the bottom-right corner, allowing users to quickly navigate to their current location
+        
+        // Locate widget: navigate to user's current location
         const locateBtn = new Locate({ view });
         const basemapGallery = new BasemapGallery({ view });
-        // Create a container for the Locate and BasemapGallery widgets, and add it to the view's UI in the bottom-right corner
+        
+        // Create container for bottom-right widgets
         const widgetRow = document.createElement('div');
         widgetRow.className = 'map-widget-row';
-        // We create separate containers for the locate button and the basemap gallery to ensure they are styled correctly and don't interfere with each other  
         const locateContainer = document.createElement('div');
         const basemapContainer = document.createElement('div');
         widgetRow.appendChild(locateContainer);
         widgetRow.appendChild(basemapContainer);
-        // Set the containers for the widgets to the respective divs we just created
+        
+        // Set locations for widgets
         locateBtn.container = locateContainer;
-        // Wrap the BasemapGallery in an Expand widget so it doesn't take up too much space, and set it to auto-collapse after a selection is made
         new Expand({
             view,
             content: basemapGallery,
             container: basemapContainer,
             autoCollapse: true
         });
-        // Finally, add the entire widget row to the view's UI in the bottom-right corner
+        
+        // Add to map UI
         view.ui.add(widgetRow, { position: 'bottom-right', index: 0 });
-        // When the view is ready, attempt to locate the user
-        // if that fails (like if they deny permission), we fall back to using the browser's geolocation API 
-        // as a last resort to center the map on their location
+        
+        // ============================================================
+        // AUTO-LOCATE USER
+        // ============================================================
+        
+        // Try to locate user when map is ready
         view.when(() => {
             locateBtn.locate().catch(() => {
+                // Fallback: use browser geolocation API
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition((position) => {
                         view.goTo({
@@ -79,43 +131,50 @@ function initMap() {
                 }
             });
         });
-        // Set up a listener for actions triggered from the popups on the map. 
-        // This allows us to handle user interactions with the popup buttons, such as reading the full entry, editing it,
-        //  or adding a new entry at the same point.
+        
+        // ============================================================
+        // POPUP ACTION HANDLING
+        // ============================================================
+        
+        /**
+         * Handle popup action buttons (Read, Edit, Add new, Close)
+         * User clicks these buttons in the popup to interact with entries
+         */
         view.popup.on('trigger-action', (popupEvent) => {
+            // Close popup action
             if (popupEvent.action.id === 'close-popup') {
                 view.popup.close();
                 return;
             }
-            // Get the selected graphic from the popup, and ensure it has the necessary attributes to identify the point and entry
+            
+            // Get the selected entry from popup
             const selectedGraphic = view.popup.selectedFeature;
-            if (!selectedGraphic) {
+            if (!selectedGraphic || !selectedGraphic.attributes) {
                 return;
             }
-            // Use the pointKey attribute from the graphic to find the corresponding point record in our pointStore; if it doesn't exist, we can't proceed
+            
+            // Find point record by key
             const pointKey = selectedGraphic.attributes.pointKey;
             if (!pointStore.has(pointKey)) {
                 return;
             }
-            // With the point record in hand, we can find the specific entry that was selected in the popup using the selectedEntryId attribute
-            // if we can't find it, we can't proceed
+            
+            // Get the selected entry
             const pointRecord = pointStore.get(pointKey);
             const selectedEntry = findEntryById(pointRecord, selectedGraphic.attributes.selectedEntryId);
-            // Depending on which action was triggered in the popup, we call the appropriate function to either open the detail panel,
-            // open the entry modal for editing, or open the entry modal for adding a new entry at the same point
             if (!selectedEntry) {
                 return;
             }
-            // Handle the different popup actions based on the action ID
+            
+            // Handle different action IDs
             if (popupEvent.action.id === 'read-full-entry') {
+                // Open detail panel to read full entry
                 openDetailPanel(pointRecord, selectedEntry);
-            }
-            // When the user clicks "Edit entry" in the popup, we want to open the entry modal pre-filled with the selected entry's data for editing
-            if (popupEvent.action.id === 'edit-entry') {
+            } else if (popupEvent.action.id === 'edit-entry') {
+                // Open modal to edit this entry
                 openEntryModal('edit', pointRecord, selectedEntry);
-            }
-            // When the user clicks "Add new entry to same point" in the popup, we want to open the entry modal for creating a new entry,
-            if (popupEvent.action.id === 'add-same-point') {
+            } else if (popupEvent.action.id === 'add-same-point') {
+                // Open modal to add new entry at same location
                 currentClickCoords = {
                     lat: pointRecord.lat,
                     lon: pointRecord.lon,
@@ -124,9 +183,16 @@ function initMap() {
                 openEntryModal('new', pointRecord, null);
             }
         });
-        // Set up a listener for single-click events on the view to select existing entries
-        // This is more mobile-friendly than double-click
+        // ============================================================
+        // CLICK HANDLING - Select Existing Entries
+        // ============================================================
+        
+        /**
+         * Single-click handler: Show popup for clicked entry point.
+         * If multiple entries at point, show selector; if one entry, show popup.
+         */
         view.on('click', async (event) => {
+            // Test if click hit any graphics
             const hitResponse = await view.hitTest(event);
             const graphicResult = hitResponse.results.find((result) => {
                 const graphic = result && result.graphic ? result.graphic : null;
@@ -136,15 +202,16 @@ function initMap() {
                 return !!graphic.attributes.pointKey && pointStore.has(graphic.attributes.pointKey);
             });
             
-            // If the user clicked on an existing graphic that has a pointKey attribute, show the popup for that point
+            // If user clicked on an entry marker
             if (graphicResult) {
                 const pointKey = graphicResult.graphic.attributes.pointKey;
                 if (!pointStore.has(pointKey)) {
                     return;
                 }
-                // If the point has multiple entries, show the entry selector popup
-                // if it has only one entry, show the entry popup
+                
                 const pointRecord = pointStore.get(pointKey);
+                
+                // Show entry selector if multiple, otherwise show single popup
                 if (pointRecord.entries.length > 1) {
                     openEntrySelectorPopup(pointRecord, event.mapPoint);
                 } else {
@@ -156,15 +223,26 @@ function initMap() {
             }
         });
         
-        // Long press (click and hold) handler for creating new entries
-        // Long press (click and hold) handler for creating new entries
+        // ============================================================
+        // LONG-PRESS HANDLING - Create New Entries
+        // ============================================================
+        
+        /**
+         * Long-press (click and hold) creates a new entry at that location.
+         * Shows visual indicator while user holds down.
+         * If user moves too much, cancels the action.
+         * 
+         * Constants:
+         * - LONG_PRESS_DURATION: 800ms (how long to hold)
+         * - MOVE_THRESHOLD: 10px (max distance before cancel)
+         */
         let longPressTimer = null;
         let longPressStartPoint = null;
         let longPressIndicator = null;
-        const LONG_PRESS_DURATION = 800; // milliseconds
-        const MOVE_THRESHOLD = 10; // pixels
+        const LONG_PRESS_DURATION = 800;   // milliseconds
+        const MOVE_THRESHOLD = 10;          // pixels
         
-        // Use standard DOM events on the container for better compatibility
+        // Add event listeners to map container
         view.container.addEventListener('mousedown', handlePressStart);
         view.container.addEventListener('touchstart', handlePressStart);
         view.container.addEventListener('mousemove', handlePressMove);
@@ -173,8 +251,12 @@ function initMap() {
         view.container.addEventListener('touchend', handlePressEnd);
         view.container.addEventListener('touchcancel', handlePressEnd);
         
+        /**
+         * Handles press start: either mouse down or touch start
+         * Records starting coordinates and creates visual indicator
+         */
         function handlePressStart(event) {
-            // Get coordinates from mouse or touch event
+            // Extract coordinates from mouse or touch event
             let clientX, clientY;
             if (event.type.startsWith('touch')) {
                 if (event.touches.length > 0) {
@@ -188,92 +270,107 @@ function initMap() {
                 clientY = event.clientY;
             }
             
-            // Convert to screen coordinates relative to the view
+            // Convert screen coordinates to map coordinates
             const rect = view.container.getBoundingClientRect();
             const x = clientX - rect.left;
             const y = clientY - rect.top;
-            
-            // Get the map point
             const mapPoint = view.toMap({ x, y });
             if (!mapPoint) return;
             
+            // Save starting position
             longPressStartPoint = { x, y, clientX, clientY, mapPoint };
             
-            // Create visual indicator
+            // Create visual indicator (small circle)
             longPressIndicator = document.createElement('div');
             longPressIndicator.className = 'long-press-indicator';
             longPressIndicator.style.left = x + 'px';
             longPressIndicator.style.top = y + 'px';
             view.container.appendChild(longPressIndicator);
             
+            // Start timeout for long-press
             longPressTimer = setTimeout(() => {
-                // Long press triggered - create new entry
+                // Long press triggered!
                 if (longPressIndicator) {
                     longPressIndicator.remove();
                     longPressIndicator = null;
                 }
                 
+                // Show guest mode warning once
                 if (isGuestMode && !guestEntryWarningShown) {
                     alert('Guest mode note: diary entries are stored temporarily and will be deleted if you refresh the page.');
                     guestEntryWarningShown = true;
                 }
                 
+                // Prepare coordinates for entry creation
                 currentClickCoords = {
                     lat: roundCoord(longPressStartPoint.mapPoint.latitude),
                     lon: roundCoord(longPressStartPoint.mapPoint.longitude),
                     mapPoint: longPressStartPoint.mapPoint
                 };
                 
+                // Open entry modal
                 const pointRecord = getOrCreatePointRecord(currentClickCoords);
                 openEntryModal('new', pointRecord, null);
                 
-                // Clear the timer so pointer-up doesn't do anything
+                // Clear state
                 longPressTimer = null;
                 longPressStartPoint = null;
             }, LONG_PRESS_DURATION);
         }
         
+        /**
+         * Handles press move: cancels long-press if moved too far
+         */
         function handlePressMove(event) {
-            // Cancel long press if user moves too much
-            if (longPressTimer && longPressStartPoint) {
-                let clientX, clientY;
-                if (event.type.startsWith('touch')) {
-                    if (event.touches.length > 0) {
-                        clientX = event.touches[0].clientX;
-                        clientY = event.touches[0].clientY;
-                    } else {
-                        return;
-                    }
+            // Don't do anything if no long-press in progress
+            if (!longPressTimer || !longPressStartPoint) {
+                return;
+            }
+            
+            // Get current coordinates
+            let clientX, clientY;
+            if (event.type.startsWith('touch')) {
+                if (event.touches.length > 0) {
+                    clientX = event.touches[0].clientX;
+                    clientY = event.touches[0].clientY;
                 } else {
-                    clientX = event.clientX;
-                    clientY = event.clientY;
+                    return;
                 }
+            } else {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+            
+            // Calculate distance moved
+            const dx = clientX - longPressStartPoint.clientX;
+            const dy = clientY - longPressStartPoint.clientY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Cancel if moved too far
+            if (distance > MOVE_THRESHOLD) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+                longPressStartPoint = null;
                 
-                const dx = clientX - longPressStartPoint.clientX;
-                const dy = clientY - longPressStartPoint.clientY;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance > MOVE_THRESHOLD) {
-                    clearTimeout(longPressTimer);
-                    longPressTimer = null;
-                    longPressStartPoint = null;
-                    
-                    if (longPressIndicator) {
-                        longPressIndicator.remove();
-                        longPressIndicator = null;
-                    }
+                if (longPressIndicator) {
+                    longPressIndicator.remove();
+                    longPressIndicator = null;
                 }
             }
         }
         
+        /**
+         * Handles press end: cancel long-press timer
+         */
         function handlePressEnd(event) {
-            // Cancel long press on release
+            // Cancel timer if still active
             if (longPressTimer) {
                 clearTimeout(longPressTimer);
                 longPressTimer = null;
                 longPressStartPoint = null;
             }
             
+            // Remove indicator if present
             if (longPressIndicator) {
                 longPressIndicator.remove();
                 longPressIndicator = null;

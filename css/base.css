@@ -1,0 +1,155 @@
+/**
+ * ============================================================
+ * WAYMARK - Core Stylesheet
+ * ============================================================
+ * 
+ * This file contains core layout styles for the Waymark
+ * application. The main component styles are in css/style.css.
+ * 
+ * Key Sections:
+ * - HTML/Body: Page-level defaults
+ * - Text elements: Paragraph and list styling
+ * - Form elements: Input and select element styling
+ * - Layout containers: Main content area layout
+ * - Tree component: Collapsible tree navigation (legacy)
+ * 
+ * ============================================================
+ */
+
+/* ============================================================
+   BASE STYLES - HTML & BODY
+   ============================================================ */
+
+html {
+    font-family: Helvetica Neue, Helvetica, Arial, Lucida Grande, sans-serif;
+}
+
+body {
+    color: #4C4C4C;
+    margin: 0;
+}
+
+/* ============================================================
+   TEXT ELEMENTS - Paragraphs, Lists, Links
+   ============================================================ */
+
+p {
+    font-size: 1em;
+    margin: 0 0 1em 0;
+}
+
+// Grayed out style for disabled/inactive elements
+.grayout {
+    opacity: 0.6;
+}
+
+// All form elements share consistent base sizing
+body, input, select, textarea, th, td {
+    font-size: 1em;
+}
+
+// List item styling with custom bullet
+li {
+    position: relative;
+    list-style: none;
+    margin-top: 5px;
+}
+
+// Link hover effect
+label:hover {
+    color: #0C479D;
+    text-decoration: underline;
+}
+
+// Custom list bullet using Unicode
+li::before {
+    content: "\23FA";
+    margin: 0 5px 0 0;
+}
+
+/* ============================================================
+   FORM ELEMENTS - Checkboxes and Inputs
+   ============================================================ */
+
+// Hidden checkbox with custom styling (used for tree collapse)
+li input {
+    position: absolute;
+    left: 0;
+    margin-left: 0;
+    background: none;
+    opacity: 0;
+    z-index: 2;
+    cursor: pointer;
+    height: 1em;
+    width: 1em;
+    top: 0;
+}
+
+// Nested list styling (initially hidden, shown when checkbox is checked)
+li input + ol {
+    margin: -15px 0 0 -44px;
+    height: 1em;
+}
+
+// Hide nested items by default
+li input + ol > li {
+    display: none;
+    margin-left: -14px !important;
+    padding-left: 1px;
+}
+
+// Show nested items when checkbox is checked
+li input:checked + ol {
+    margin: -20px 0 0 -44px;
+    padding: 25px 0 0 80px;
+    height: auto;
+}
+
+li input:checked + ol > li {
+    display: block;
+    margin: 0 0 2px;
+}
+
+li input:checked + ol > li:last-child {
+    margin: 0 0 1px;
+}
+
+/* ============================================================
+   LAYOUT - Main Content Containers
+   ============================================================ */
+
+// Indent for location information
+div.location {
+    margin-left: 40px;
+}
+
+// Full-height layout containers
+html, body, #inspection-tree, #description {
+  height: 100%;
+}
+
+// Tree panel (left side
+#inspection-tree {
+    float: left;
+    overflow: auto;
+    margin-left: 20px;
+    width: 50%;
+}
+
+// Description panel (right side)
+#description {
+  width: calc(50% - 40px);
+  float: left;
+  overflow: auto;
+  margin-left: 20px;
+}
+
+
+.problem-description-group {
+    margin-top: 40px;
+    font-weight: bold;
+}
+
+.problem-description {
+  margin-left: 40px;
+}
