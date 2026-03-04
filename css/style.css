@@ -62,12 +62,12 @@ input, textarea {
     padding: 16px;
     border-radius: 12px;
     width: 95vw;
-    height: 90vh;
     max-width: 1000px;
     display: flex;
     flex-direction: column;
     text-align: left;
     max-height: 95vh;
+    min-height: 50vh;
 }
 
 .entry-modal-box h3 {
@@ -510,7 +510,8 @@ input, textarea {
 
     .entry-modal-box {
         width: 90vw;
-        height: 85vh;
+        max-height: 85vh;
+        min-height: 50vh;
     }
 
     /* Story edit modal two-column layout on desktop */
@@ -555,7 +556,8 @@ input, textarea {
 
     .entry-modal-box {
         width: 98vw;
-        height: 95vh;
+        max-height: 95vh;
+        min-height: 50vh;
         padding: 12px;
     }
 
