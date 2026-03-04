@@ -57,6 +57,16 @@ function closeEntryModal() {
     document.getElementById('entryImageInput').value = '';
     currentEditingEntryId = null;
     currentEntryImage = null;
+    
+    // Clean up any pending long-press indicators if they're still present
+    const indicators = document.querySelectorAll('.long-press-indicator');
+    indicators.forEach(indicator => {
+        try {
+            indicator.remove();
+        } catch (e) {
+            // Indicator might already be removed
+        }
+    });
 }
 
 // Updates the sidebar list of entries, showing a preview of each entry and its location

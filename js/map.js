@@ -160,53 +160,57 @@ function initMap() {
         let longPressTimer = null;
         let longPressStartPoint = null;
         let longPressIndicator = null;
-        const LONG_PRESS_DURATION = 600; // milliseconds
-        const MOVE_THRESHOLD = 10; // pixels
+        let isLongPressActive = false;
+        const LONG_PRESS_DURATION = 800; // milliseconds - increased from 600 for better mobile detection
+        const MOVE_THRESHOLD = 5; // pixels - very small threshold to avoid interfering with map panning
         
-        // Use standard DOM events on the container for better compatibility
-        view.container.addEventListener('mousedown', handlePressStart);
-        view.container.addEventListener('touchstart', handlePressStart);
-        view.container.addEventListener('mousemove', handlePressMove);
-        view.container.addEventListener('touchmove', handlePressMove);
-        view.container.addEventListener('mouseup', handlePressEnd);
-        view.container.addEventListener('touchend', handlePressEnd);
-        view.container.addEventListener('touchcancel', handlePressEnd);
+        // Use Esri's native pointer-down/move/up events instead of raw DOM events
+        // This integrates better with the map's pan and zoom gestures
+        view.on('pointer-down', handlePressStart);
+        view.on('pointer-move', handlePressMove);
+        view.on('pointer-up', handlePressEnd);
+        
+        // Also listen for pointer-leave and blur in case pointer escapes the view
+        view.on('pointer-leave', handlePressEnd);
+        document.addEventListener('touchcancel', handlePressEnd, false);
         
         function handlePressStart(event) {
-            // Get coordinates from mouse or touch event
-            let clientX, clientY;
-            if (event.type.startsWith('touch')) {
-                if (event.touches.length > 0) {
-                    clientX = event.touches[0].clientX;
-                    clientY = event.touches[0].clientY;
-                } else {
-                    return;
-                }
-            } else {
-                clientX = event.clientX;
-                clientY = event.clientY;
+            // Ignore if we're already in a long press or if using mouse right-click
+            if (longPressTimer || isLongPressActive) {
+                return;
             }
             
-            // Convert to screen coordinates relative to the view
-            const rect = view.container.getBoundingClientRect();
-            const x = clientX - rect.left;
-            const y = clientY - rect.top;
+            if (event.button === 2) { // right-click
+                return;
+            }
             
-            // Get the map point
-            const mapPoint = view.toMap({ x, y });
+            // Extract coordinates from the Esri pointer event
+            const mapPoint = event.mapPoint;
             if (!mapPoint) return;
             
-            longPressStartPoint = { x, y, clientX, clientY, mapPoint };
+            // Get screen coordinates for the indicator
+            const screenCoords = view.toScreen(mapPoint);
+            if (!screenCoords) return;
+            
+            longPressStartPoint = { 
+                x: screenCoords.x, 
+                y: screenCoords.y, 
+                mapX: event.x,
+                mapY: event.y,
+                mapPoint: mapPoint 
+            };
             
             // Create visual indicator
             longPressIndicator = document.createElement('div');
             longPressIndicator.className = 'long-press-indicator';
-            longPressIndicator.style.left = x + 'px';
-            longPressIndicator.style.top = y + 'px';
+            longPressIndicator.style.left = screenCoords.x + 'px';
+            longPressIndicator.style.top = screenCoords.y + 'px';
             view.container.appendChild(longPressIndicator);
             
             longPressTimer = setTimeout(() => {
                 // Long press triggered - create new entry
+                isLongPressActive = true;
+                
                 if (longPressIndicator) {
                     longPressIndicator.remove();
                     longPressIndicator = null;
@@ -234,47 +238,41 @@ function initMap() {
         
         function handlePressMove(event) {
             // Cancel long press if user moves too much
-            if (longPressTimer && longPressStartPoint) {
-                let clientX, clientY;
-                if (event.type.startsWith('touch')) {
-                    if (event.touches.length > 0) {
-                        clientX = event.touches[0].clientX;
-                        clientY = event.touches[0].clientY;
-                    } else {
-                        return;
-                    }
-                } else {
-                    clientX = event.clientX;
-                    clientY = event.clientY;
-                }
+            if (longPressTimer && longPressStartPoint && event.mapPoint) {
+                const screenCoords = view.toScreen(event.mapPoint);
+                if (!screenCoords) return;
                 
-                const dx = clientX - longPressStartPoint.clientX;
-                const dy = clientY - longPressStartPoint.clientY;
+                const dx = screenCoords.x - longPressStartPoint.x;
+                const dy = screenCoords.y - longPressStartPoint.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
                 if (distance > MOVE_THRESHOLD) {
-                    clearTimeout(longPressTimer);
-                    longPressTimer = null;
-                    longPressStartPoint = null;
-                    
-                    if (longPressIndicator) {
-                        longPressIndicator.remove();
-                        longPressIndicator = null;
-                    }
+                    clearPressState();
                 }
             }
         }
         
         function handlePressEnd(event) {
-            // Cancel long press on release
+            // Reset the active state immediately
+            isLongPressActive = false;
+            clearPressState();
+        }
+        
+        // Helper function to cleanly clear all press-related state
+        function clearPressState() {
             if (longPressTimer) {
                 clearTimeout(longPressTimer);
                 longPressTimer = null;
-                longPressStartPoint = null;
             }
+            longPressStartPoint = null;
             
             if (longPressIndicator) {
-                longPressIndicator.remove();
+                // Ensure the indicator is properly removed
+                try {
+                    longPressIndicator.remove();
+                } catch (e) {
+                    // Indicator might already be removed
+                }
                 longPressIndicator = null;
             }
         }
