@@ -1,5 +1,13 @@
 // Story/Journey Management
 
+// Helper function to convert hex color to RGBA array
+function hexToRgba(hex, alpha = 0.95) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return [r, g, b, alpha];
+}
+
 // Opens the stories modal showing all stories and options to create, edit, or manage them
 function openStoriesModal() {
     const listContainer = document.getElementById('storiesList');
@@ -31,13 +39,16 @@ function openStoryEditModal(storyId) {
     currentEditingStoryId = storyId;
     currentStoryEditEntries = [];
     const titleInput = document.getElementById('storyTitleInput');
+    const colorInput = document.getElementById('storyLineColor');
 
     if (storyId) {
         const story = stories.find(s => s.id === storyId);
         titleInput.value = story.title;
+        colorInput.value = story.lineColor || '#a43855';
         currentStoryEditEntries = [...story.entryIds];
     } else {
         titleInput.value = '';
+        colorInput.value = '#a43855';
     }
 
     renderStoryEditLists();
@@ -97,6 +108,7 @@ function removeEntryFromStory(entryId) {
 // Saves the current story being edited, creating or updating it with the selected entries and title
 function saveStory() {
     const title = document.getElementById('storyTitleInput').value.trim();
+    const colorHex = document.getElementById('storyLineColor').value;
     if (!title) { alert("Give your story a title!"); return; }
 
     // Grab the actual DOM order from the dragged list
@@ -112,9 +124,10 @@ function saveStory() {
         story = stories.find(s => s.id === currentEditingStoryId);
         story.title = title;
         story.entryIds = orderedEntryIds;
+        story.lineColor = colorHex;
     } else {
         story = {
-            id: nextStoryId++, title, entryIds: orderedEntryIds, visible: true, totalMiles: 0, graphicsLayer: new GraphicsLayerCtor()
+            id: nextStoryId++, title, entryIds: orderedEntryIds, visible: true, totalMiles: 0, graphicsLayer: new GraphicsLayerCtor(), lineColor: colorHex
         };
         mapInstance.add(story.graphicsLayer);
         stories.push(story);
@@ -157,7 +170,7 @@ function updateStoryMapGraphics(story) {
 
         const lineGraphic = new GraphicCtor({
             geometry: polyline,
-            symbol: { type: "simple-line", color: [164, 56, 85, 0.95], width: 4, style: "solid" }
+            symbol: { type: "simple-line", color: hexToRgba(story.lineColor || '#a43855'), width: 4, style: "solid" }
         });
         story.graphicsLayer.add(lineGraphic);
 
