@@ -524,6 +524,7 @@ input, textarea {
     /* Story edit modal two-column layout on desktop */
     #storyEditModal .entry-modal-box > div[style*="display: flex"] {
         flex-direction: row;
+        overflow: visible !important;
     }
 }
 
@@ -650,7 +651,8 @@ input, textarea {
     padding: 10px;
     background: #fafafa;
     border-radius: 6px;
-    min-height: 200px;
+    min-height: 0;
+    max-height: 200px;
 }
 /* Individual draggable items representing entries */
 .draggable-item {
