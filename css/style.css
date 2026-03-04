@@ -182,8 +182,8 @@ input, textarea {
     font-family: 'Lora', serif;
     -webkit-appearance: none;
     appearance: none;
-    min-height: 120px;
-    max-height: 300px;
+    min-height: 200px;
+    max-height: none;
 }
 /* Remove default focus outline and add a subtle border color change on focus */
 .entry-editor:focus {
@@ -615,8 +615,9 @@ input, textarea {
     }
 
     .entry-editor {
-        min-height: 150px;
-        max-height: 400px;
+        min-height: 250px;
+        height: auto;
+        flex: 1 1 auto;
     }
 
     #entryTitle {

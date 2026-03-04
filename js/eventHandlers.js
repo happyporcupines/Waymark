@@ -174,30 +174,18 @@ document.addEventListener('keydown', (event) => {
         return;
     }
     
-    if (event.key === 'Enter') {
-        // Prevent any default Enter key behavior that might be clearing content
-        event.preventDefault();
-        
-        // Insert a line break manually
-        const selection = window.getSelection();
-        if (!selection.rangeCount) return;
-        
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        
-        // Insert a <br> followed by another <br> for proper spacing
-        const br = document.createElement('br');
-        range.insertNode(br);
-        
-        // Move cursor after the br
-        range.setStartAfter(br);
-        range.setEndAfter(br);
-        selection.removeAllRanges();
-        selection.addRange(range);
-        
-        // Scroll the editor to keep cursor visible
-        editor.scrollTop = editor.scrollHeight;
+    // Check for Enter/Return key (keyCode 13 for better mobile compatibility)
+    if (event.key === 'Enter' || event.keyCode === 13) {
+        // Don't prevent default - let the browser handle it naturally
+        // The issue was likely preventDefault breaking mobile keyboard behavior
+        return;
     }
+});
+
+// Additional handler to catch any form submission attempts
+document.addEventListener('submit', (event) => {
+    event.preventDefault();
+    return false;
 });
 
 // Mobile navigation state management
