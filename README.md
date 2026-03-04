@@ -110,6 +110,10 @@ Tested on:
 - Opera on Linux Fedora 43
 - Opera on Google Pixel 8
 
+## Known Bugs
+- **Color Picker on Mobile**: the color yellow doesn't appear depending on your browser or your phone's dark mode settings
+
+
 ## Author
 
 Created by Brooke Fandrich
