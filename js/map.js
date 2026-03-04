@@ -161,50 +161,65 @@ function initMap() {
         let longPressStartPoint = null;
         let longPressIndicator = null;
         let isLongPressActive = false;
-        const LONG_PRESS_DURATION = 800; // milliseconds - increased from 600 for better mobile detection
-        const MOVE_THRESHOLD = 5; // pixels - very small threshold to avoid interfering with map panning
+        const LONG_PRESS_DURATION = 800; // milliseconds
+        const MOVE_THRESHOLD = 5; // pixels - very small threshold to detect panning
         
-        // Use Esri's native pointer-down/move/up events instead of raw DOM events
-        // This integrates better with the map's pan and zoom gestures
-        view.on('pointer-down', handlePressStart);
-        view.on('pointer-move', handlePressMove);
-        view.on('pointer-up', handlePressEnd);
+        // Listen for press events on the view container
+        // Use capture phase to ensure we get the events before the map does
+        view.container.addEventListener('pointerdown', handlePressStart, true);
+        view.container.addEventListener('pointermove', handlePressMove, true);
+        view.container.addEventListener('pointerup', handlePressEnd, true);
+        view.container.addEventListener('pointercancel', handlePressEnd, true);
         
-        // Also listen for pointer-leave and blur in case pointer escapes the view
-        view.on('pointer-leave', handlePressEnd);
-        document.addEventListener('touchcancel', handlePressEnd, false);
+        // Fallback for touch and mouse events
+        view.container.addEventListener('touchstart', handlePressStart, true);
+        view.container.addEventListener('touchmove', handlePressMove, true);
+        view.container.addEventListener('touchend', handlePressEnd, true);
+        view.container.addEventListener('touchcancel', handlePressEnd, true);
+        
+        view.container.addEventListener('mousedown', handlePressStart, true);
+        view.container.addEventListener('mousemove', handlePressMove, true);
+        view.container.addEventListener('mouseup', handlePressEnd, true);
         
         function handlePressStart(event) {
-            // Ignore if we're already in a long press or if using mouse right-click
+            // Ignore if we're already in a long press
             if (longPressTimer || isLongPressActive) {
                 return;
             }
             
-            if (event.button === 2) { // right-click
+            // Ignore right-click
+            if (event.button === 2) {
                 return;
             }
             
-            // Extract coordinates from the Esri pointer event
-            const mapPoint = event.mapPoint;
+            // Get coordinates from touch or mouse event
+            let clientX, clientY;
+            if (event.touches && event.touches.length > 0) {
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else if (event.clientX !== undefined && event.clientY !== undefined) {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            } else {
+                return;
+            }
+            
+            // Convert to view-relative coordinates
+            const rect = view.container.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            
+            // Get the map point
+            const mapPoint = view.toMap({ x, y });
             if (!mapPoint) return;
             
-            // Get screen coordinates for the indicator
-            const screenCoords = view.toScreen(mapPoint);
-            if (!screenCoords) return;
-            
-            longPressStartPoint = { 
-                x: screenCoords.x, 
-                y: screenCoords.y, 
-                mapX: event.x,
-                mapY: event.y,
-                mapPoint: mapPoint 
-            };
+            longPressStartPoint = { x, y, clientX, clientY, mapPoint };
             
             // Create visual indicator
             longPressIndicator = document.createElement('div');
             longPressIndicator.className = 'long-press-indicator';
-            longPressIndicator.style.left = screenCoords.x + 'px';
-            longPressIndicator.style.top = screenCoords.y + 'px';
+            longPressIndicator.style.left = x + 'px';
+            longPressIndicator.style.top = y + 'px';
             view.container.appendChild(longPressIndicator);
             
             longPressTimer = setTimeout(() => {
@@ -230,20 +245,28 @@ function initMap() {
                 const pointRecord = getOrCreatePointRecord(currentClickCoords);
                 openEntryModal('new', pointRecord, null);
                 
-                // Clear the timer so pointer-up doesn't do anything
+                // Clear the timer
                 longPressTimer = null;
                 longPressStartPoint = null;
             }, LONG_PRESS_DURATION);
         }
         
         function handlePressMove(event) {
-            // Cancel long press if user moves too much
-            if (longPressTimer && longPressStartPoint && event.mapPoint) {
-                const screenCoords = view.toScreen(event.mapPoint);
-                if (!screenCoords) return;
+            // Cancel long press if user moves
+            if (longPressTimer && longPressStartPoint) {
+                let clientX, clientY;
+                if (event.touches && event.touches.length > 0) {
+                    clientX = event.touches[0].clientX;
+                    clientY = event.touches[0].clientY;
+                } else if (event.clientX !== undefined && event.clientY !== undefined) {
+                    clientX = event.clientX;
+                    clientY = event.clientY;
+                } else {
+                    return;
+                }
                 
-                const dx = screenCoords.x - longPressStartPoint.x;
-                const dy = screenCoords.y - longPressStartPoint.y;
+                const dx = clientX - longPressStartPoint.clientX;
+                const dy = clientY - longPressStartPoint.clientY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
                 if (distance > MOVE_THRESHOLD) {
@@ -253,7 +276,7 @@ function initMap() {
         }
         
         function handlePressEnd(event) {
-            // Reset the active state immediately
+            // Reset the active state
             isLongPressActive = false;
             clearPressState();
         }
@@ -267,7 +290,6 @@ function initMap() {
             longPressStartPoint = null;
             
             if (longPressIndicator) {
-                // Ensure the indicator is properly removed
                 try {
                     longPressIndicator.remove();
                 } catch (e) {
@@ -275,6 +297,5 @@ function initMap() {
                 }
                 longPressIndicator = null;
             }
-        }
     });
 }
