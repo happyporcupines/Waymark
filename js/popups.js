@@ -88,7 +88,7 @@ function openEntrySelectorPopup(pointRecord, location) {
 // Updates the graphic for a point record, reflecting the latest entry and story status
 function updatePointGraphic(pointRecord) {
     const latestEntry = getLatestEntry(pointRecord);
-    if (!latestEntry) { return; }
+    if (!latestEntry || !pointRecord) { return; }
 
     // Check if this point is locked into a story
     let pointStory = null;
@@ -104,6 +104,7 @@ function updatePointGraphic(pointRecord) {
     const targetMarkerColor = pointStory ? [0, 0, 0] : [164, 56, 85];
 
     if (!pointRecord.graphic) {
+        // Create a new graphic
         pointRecord.graphic = new GraphicCtor({
             geometry: pointRecord.mapPoint,
             symbol: {
@@ -114,14 +115,27 @@ function updatePointGraphic(pointRecord) {
             attributes: { pointKey: pointRecord.pointKey, selectedEntryId: latestEntry.id, title: latestEntry.title },
             popupTemplate
         });
-        // Add the new graphic to the appropriate layer (story layer if part of a story, otherwise the main app layer)
+        // Add the new graphic to the appropriate layer
         targetLayer.add(pointRecord.graphic);
     } else {
-        if (pointRecord.graphic.layer && pointRecord.graphic.layer !== targetLayer) {
-            pointRecord.graphic.layer.remove(pointRecord.graphic);
-            targetLayer.add(pointRecord.graphic);
+        // Check if we need to move the graphic to a different layer
+        const currentLayer = pointRecord.graphic.layer;
+        if (currentLayer && currentLayer !== targetLayer) {
+            // Remove from old layer, add to new layer
+            if (pointRecord.graphic in currentLayer.graphics) {
+                try {
+                    currentLayer.remove(pointRecord.graphic);
+                } catch (e) {
+                    // Layer removal might fail if graphic was already removed
+                }
+            }
+            try {
+                targetLayer.add(pointRecord.graphic);
+            } catch (e) {
+                // Layer add might fail due to graphic already in layer
+            }
         }
-        // Update the existing graphic's symbol, attributes, and popup template to reflect any changes
+        // Update the existing graphic's symbol, attributes, and popup template
         pointRecord.graphic.symbol = {
             type: 'simple-marker',
             color: targetMarkerColor,
