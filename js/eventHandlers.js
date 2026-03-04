@@ -167,6 +167,39 @@ document.getElementById('entryImageInput')?.addEventListener('change', (event) =
     reader.readAsDataURL(file);
 });
 
+// Handle Enter key in contenteditable editor to ensure proper line breaks on mobile
+document.addEventListener('keydown', (event) => {
+    const editor = document.getElementById('entryEditor');
+    if (!editor || event.target !== editor) {
+        return;
+    }
+    
+    if (event.key === 'Enter') {
+        // Prevent any default Enter key behavior that might be clearing content
+        event.preventDefault();
+        
+        // Insert a line break manually
+        const selection = window.getSelection();
+        if (!selection.rangeCount) return;
+        
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        
+        // Insert a <br> followed by another <br> for proper spacing
+        const br = document.createElement('br');
+        range.insertNode(br);
+        
+        // Move cursor after the br
+        range.setStartAfter(br);
+        range.setEndAfter(br);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        
+        // Scroll the editor to keep cursor visible
+        editor.scrollTop = editor.scrollHeight;
+    }
+});
+
 // Mobile navigation state management
 function updateMobileNavState(activeNavId) {
     const navButtons = document.querySelectorAll('.mobile-nav button');

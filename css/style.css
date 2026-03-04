@@ -615,8 +615,8 @@ input, textarea {
     }
 
     .entry-editor {
-        min-height: 100px;
-        max-height: 200px;
+        min-height: 150px;
+        max-height: 400px;
     }
 
     #entryTitle {
