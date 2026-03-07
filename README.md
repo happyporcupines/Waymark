@@ -6,6 +6,9 @@ A web-based diary application that lets users record personal journal entries di
 
 Waymark combines traditional journaling with geospatial storytelling. Instead of writing in a linear diary, users mark locations on a map where significant moments occurred and attach diary entries to those points. The app supports creating "stories"—journeys that connect multiple entries with visualized paths and distance calculations. This is also especially helpful for field notes.
 
+## Note on Current App State:
+Currently only guest mode is supported. I hope to actually turn this into a working mobile/online app hosted with Supabase so that the login feature will have a secure backend and individual's stored entries are saved safely.
+
 ## Features
 
 ### Core Features
