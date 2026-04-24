@@ -68,6 +68,18 @@ document.addEventListener('click', (event) => {
         }
         return;
     }
+    if (target.closest('#signupBtn')) {
+        const email = document.getElementById('emailInput').value.trim();
+        const password = document.getElementById('passwordInput').value;
+        if (email && password) {
+            if (typeof handleSignupAction === 'function') {
+                handleSignupAction(email, password);
+            }
+        } else {
+            alert('Please enter both email and password to continue.');
+        }
+        return;
+    }
     // Guest mode button
     if (target.closest('#guestBtn')) {
         enterApp('Guest mode: data will not be saved', true);

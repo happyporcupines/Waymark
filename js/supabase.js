@@ -730,25 +730,7 @@ async function handleLoginAction(email, password) {
         const loginResult = await client.auth.signInWithPassword({ email, password });
 
         if (loginResult.error) {
-            const signupResult = await client.auth.signUp({
-                email,
-                password,
-                options: {
-                    emailRedirectTo: getAuthRedirectUrl()
-                }
-            });
-            if (signupResult.error) {
-                setAuthStatus(signupResult.error.message || 'Authentication failed.', true);
-                return;
-            }
-
-            if (!signupResult.data.session) {
-                setAuthStatus('Account created. Check your email to confirm before signing in.');
-                return;
-            }
-
-            await enterAuthenticatedApp(signupResult.data.user);
-            setAuthStatus('Account created and signed in.');
+            setAuthStatus(loginResult.error.message || 'Incorrect email or password.', true);
             return;
         }
 
@@ -756,6 +738,43 @@ async function handleLoginAction(email, password) {
         setAuthStatus('Signed in.');
     } catch (error) {
         console.error('[Waymark] Login error:', error);
+        const errorMsg = error?.message || 'Connection failed. Please check your internet connection and try again.';
+        setAuthStatus(errorMsg, true);
+    }
+}
+
+async function handleSignupAction(email, password) {
+    const client = getSupabaseClient();
+    if (!client) {
+        setAuthStatus('Add Supabase URL and anon key in js/config.js first.', true);
+        return;
+    }
+
+    setAuthStatus('Creating account...');
+
+    try {
+        const signupResult = await client.auth.signUp({
+            email,
+            password,
+            options: {
+                emailRedirectTo: getAuthRedirectUrl()
+            }
+        });
+
+        if (signupResult.error) {
+            setAuthStatus(signupResult.error.message || 'Could not create account.', true);
+            return;
+        }
+
+        if (!signupResult.data.session) {
+            setAuthStatus('Account created! Check your email to confirm before signing in.');
+            return;
+        }
+
+        await enterAuthenticatedApp(signupResult.data.user);
+        setAuthStatus('Account created and signed in.');
+    } catch (error) {
+        console.error('[Waymark] Signup error:', error);
         const errorMsg = error?.message || 'Connection failed. Please check your internet connection and try again.';
         setAuthStatus(errorMsg, true);
     }
