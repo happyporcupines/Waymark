@@ -700,9 +700,18 @@ async function enterAuthenticatedApp(user) {
         return;
     }
 
+    // Prefer server-fresh metadata over the potentially stale JWT payload
     authenticatedUser = user;
+    const client = getSupabaseClient();
+    if (client) {
+        const { data: freshData } = await client.auth.getUser();
+        if (freshData && freshData.user) {
+            authenticatedUser = freshData.user;
+        }
+    }
+
     isGuestMode = false;
-    enterApp(`User: ${user.email}`, false);
+    enterApp(`User: ${authenticatedUser.email}`, false);
     updateAuthUi();
 
     if (loadedUserId !== user.id) {
