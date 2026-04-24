@@ -35,7 +35,12 @@
 
 /* Root HTML and body setup
  * Disable text selection globally (except inputs/textareas)
+ * Disable text selection globally (except inputs/textareas)
  * to prevent accidental selection during drag operations */
+:root {
+    color-scheme: light only;
+}
+
 html, body {
     padding: 0; margin: 0;
     height: 100%; width: 100%;
