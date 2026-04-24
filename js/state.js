@@ -107,6 +107,13 @@ let appView = null;
 let appGraphicsLayer = null;
 
 /**
+ * Reference to the ArcGIS Point constructor
+ * Used to rebuild map points when hydrating entries from Supabase
+ * @type {Function|null}
+ */
+let PointCtor = null;
+
+/**
  * Reference to the ArcGIS Graphic constructor
  * Used to create new map graphics for entry points and story lines
  * Stored globally to avoid repeated module requires
@@ -182,3 +189,19 @@ let nextStoryId = 1;
  * @type {HTMLElement|null}
  */
 let draggedEntryItem = null;
+
+// ============================================================================
+// AUTHENTICATION & REMOTE SYNC STATE
+// ============================================================================
+
+/**
+ * Active Supabase auth user object for authenticated sessions
+ * @type {Object|null}
+ */
+let authenticatedUser = null;
+
+/**
+ * Prevents remote sync from firing while we are hydrating server data
+ * @type {boolean}
+ */
+let isHydratingRemoteData = false;

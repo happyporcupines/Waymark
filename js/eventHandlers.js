@@ -55,17 +55,28 @@ document.addEventListener('click', (event) => {
     }
     // Login & Navigation
     if (target.closest('#loginBtn')) {
-        const email = document.getElementById('emailInput').value;
-        if (email) {
-            enterApp(`User: ${email}`, false);
+        const email = document.getElementById('emailInput').value.trim();
+        const password = document.getElementById('passwordInput').value;
+        if (email && password) {
+            if (typeof handleLoginAction === 'function') {
+                handleLoginAction(email, password);
+            } else {
+                enterApp(`User: ${email}`, false);
+            }
         } else {
-            alert("Please enter an email to log in!");
+            alert('Please enter both email and password to continue.');
         }
         return;
     }
     // Guest mode button
     if (target.closest('#guestBtn')) {
         enterApp('Guest mode: data will not be saved', true);
+        return;
+    }
+    if (target.closest('#logoutBtn')) {
+        if (typeof handleLogoutAction === 'function') {
+            handleLogoutAction();
+        }
         return;
     }
     // Navigation buttons

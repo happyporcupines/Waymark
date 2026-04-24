@@ -124,9 +124,6 @@ function getLatestEntry(pointRecord) {
  * // Now the entry appears in sidebar and story creation lists
  */
 function upsertGuestArrayEntry(entry, pointRecord) {
-    if (!isGuestMode) {
-        return;
-    }
     // Check if an entry for this point already exists in the journalEntries array
     const existingIndex = journalEntries.findIndex((item) => item.id === entry.id);
     
@@ -233,6 +230,9 @@ function saveEntry() {
     // Update UI to reflect the changes
     updatePointGraphic(pointRecord);  // Refresh map marker
     updateSidebarList();               // Refresh entry list
+    if (typeof queueSupabaseSync === 'function') {
+        queueSupabaseSync();
+    }
     closeEntryModal();                 // Close modal and reset state
 }
 

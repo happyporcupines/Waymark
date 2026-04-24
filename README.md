@@ -1,126 +1,109 @@
-# Waymark - Diary Map Application
+# Waymark
 
-A web-based diary application that lets users record personal journal entries directly on an interactive map. Create entries at locations, add rich text content, upload images, and build stories by connecting multiple entries into journeys.
+Waymark is a browser-based map diary that lets users pin journal entries to locations and connect entries into story routes.
 
-## Overview
+This project is now prepared for:
 
-Waymark combines traditional journaling with geospatial storytelling. Instead of writing in a linear diary, users mark locations on a map where significant moments occurred and attach diary entries to those points. The app supports creating "stories"—journeys that connect multiple entries with visualized paths and distance calculations. This is also especially helpful for field notes.
+- Supabase Auth (email/password)
+- Supabase database persistence for per-user entries and stories
+- Progressive Web App support (manifest + service worker)
 
-## Note on Current App State:
-Currently only guest mode is supported. I hope to actually turn this into a working mobile/online app hosted with Supabase so that the login feature will have a secure backend and individual's stored entries are saved safely.
+## Current state
 
-## Features
+- Guest mode works as before (session-only local state).
+- Authenticated mode is wired to Supabase and restores saved data per user.
+- Login button behavior is: sign in first, and if account does not exist, sign up.
 
-### Core Features
-- **Interactive Map**: Built on ArcGIS JavaScript API for intuitive geospatial interaction
-- **Location-Based Entries**: Click on the map to create diary entries at specific coordinates
-- **Rich Text Editing**: Format entries with bold, italic, links, bullet lists, numbered lists, and checklists
-- **Image Support**: Upload and attach images to diary entries
-- **Story Creation**: Connect multiple entries into journeys with:
-  - Polyline visualization connecting entry locations
-  - Distance calculations for segments and total journey
-  - Color customization for each story
-  - Drag-and-drop reordering of entries
-
-### User Interface
-- **Responsive Design**: Works on desktop and mobile devices
-- **Sidebar Navigation**: View entry list and switch between Map, Entries, and Profile views
-- **Detail Panel**: Read-only view of individual entries
-- **Entry Editor Modal**: Create and edit entries with timestamp, title, and formatted content
-- **Guest Mode**: Use the app without authentication (data stored locally in browser)
-
-## Project Structure
+## Project structure
 
 ```
 Waymark/
-├── index.html           # Main HTML file with UI layout
+├── index.html
+├── manifest.webmanifest
+├── sw.js
 ├── css/
-│   ├── base.css         # Core styling
-│   └── components.css   # Component-specific styles
-└── js/
-    ├── main.js          # Application entry point
-    ├── state.js         # Global state management
-    ├── map.js           # ArcGIS map initialization and handlers
-    ├── entries.js       # Entry creation and CRUD operations
-    ├── stories.js       # Story/journey management
-    ├── popups.js        # Popup and modal interactions
-    ├── eventHandlers.js # Event listeners and user interactions
-    ├── ui.js            # UI updates and rendering
-    └── utils.js         # Utility functions
+│   └── style.css
+├── icons/
+│   ├── icon-192.svg
+│   └── icon-512.svg
+├── js/
+│   ├── config.js
+│   ├── config.example.js
+│   ├── supabase.js
+│   ├── pwa.js
+│   ├── state.js
+│   ├── utils.js
+│   ├── entries.js
+│   ├── popups.js
+│   ├── ui.js
+│   ├── stories.js
+│   ├── map.js
+│   └── eventHandlers.js
+└── supabase/
+    └── schema.sql
 ```
 
-## Architecture
+## Supabase setup
 
-### Modular JavaScript Design
-The application is organized into focused modules that handle specific responsibilities:
+1. Create a Supabase project.
+2. In Supabase dashboard, enable Email auth provider.
+3. Open SQL Editor and run [supabase/schema.sql](supabase/schema.sql).
+4. Copy your Project URL and anon public key.
+5. Edit [js/config.js](js/config.js):
 
-- **State Management** (`state.js`): Centralized storage for all application state including entries, stories, user mode, and map references
-- **Map Integration** (`map.js`): Manages ArcGIS map initialization, graphics layers, and map interactions
-- **Data Operations** (`entries.js`): CRUD operations for diary entries stored in browser memory
-- **Story System** (`stories.js`): Creates and manages story narratives connecting multiple entries with visual paths
-- **UI Layer** (`ui.js`, `popups.js`): Renders entries, stories, and handles modal/panel displays
-- **Event Handling** (`eventHandlers.js`): Routes user interactions to appropriate handlers
-- **Utilities** (`utils.js`): Common helper functions used across modules
+```js
+window.WAYMARK_CONFIG = {
+    SUPABASE_URL: 'https://YOUR_PROJECT_REF.supabase.co',
+    SUPABASE_ANON_KEY: 'YOUR_SUPABASE_ANON_PUBLIC_KEY'
+};
+```
 
-### Data Flow
-1. **User clicks map** → Map click handler triggers entry creation modal
-2. **User enters data** → Entry stored in `journalEntries` state array
-3. **Entry visualized** → Graphics added to ArcGIS map layer
-4. **User creates story** → Multiple entries selected and connected with polylines
-5. **Story persisted** → Story metadata stored and displayed alongside entries
+You can reference [js/config.example.js](js/config.example.js) as a template.
 
-### Key Design Decisions
-- **Guest Mode First**: Designed for users who want to start journaling immediately without authentication
-- **Client-Side Storage**: Uses browser memory for simplicity; suitable for personal journaling sessions
-- **ArcGIS Integration**: Leverages enterprise-grade mapping library for robust geospatial features
-- **Rich Text Editing**: Uses browser's native `contenteditable` API with formatting toolbar
-- **Responsive Layout**: Single-page app with mobile navigation for multiple screen sizes
+## Data model
 
-## Getting Started
+Two tables are used:
 
-### Requirements
-- Modern web browser with JavaScript enabled
-- Internet connection (for ArcGIS API and map tiles)
+- `entries`: per-user journal entries mapped to geographic point keys
+- `stories`: per-user story routes, entry ordering, visibility, color
 
-### Usage
-1. Open `index.html` in a web browser
-2. The map will load with your current region centered
-3. Click on the map to create a diary entry at that location
-4. Fill in the entry title, date, and formatted text content
-5. Optionally add an image
-6. Click "Save Entry" to create the entry marker on the map
-7. Click on entry markers to view or edit entries
-8. Create stories by selecting multiple entries and connecting them into journeys
+Row Level Security is enabled and scoped to `auth.uid() = user_id`.
 
-### Navigation
-- **🗺️ Map**: View the interactive map with all entries
-- **📝 Entries**: List view of all diary entries
-- **👤 Profile**: User information and settings
-- **📖 Stories**: Create and manage story journeys
+## Hosting from Supabase
 
-## Technologies Used
+This app is static, so host the built folder as static files (for example with Supabase Storage + CDN or any static host) while keeping Auth + Postgres in Supabase.
 
-- **ArcGIS JavaScript API 4.28**: Mapping and geospatial visualization
-- **HTML5**: Semantic markup and form elements
-- **CSS3**: Responsive styling and layout
-- **Vanilla JavaScript (ES6)**: Core application logic
-- **Browser APIs**: 
-  - Geolocation API for user location
-  - File API for image uploads
-  - LocalStorage (potential for data persistence)
+Requirements for hosting:
 
-Tested on:
-- Opera on Linux Fedora 43
-- Opera on Google Pixel 8
+- Serve over HTTPS.
+- Keep file paths unchanged (root-based static hosting).
+- Ensure `index.html`, `manifest.webmanifest`, and `sw.js` are served with correct content types.
 
-## Known Bugs
-- **Color Picker on Mobile**: the color yellow doesn't appear depending on your browser or your phone's dark mode settings
+## PWA support
 
+PWA pieces included:
 
-## Author
+- [manifest.webmanifest](manifest.webmanifest)
+- [sw.js](sw.js) with app-shell caching
+- Service worker registration in [js/pwa.js](js/pwa.js)
 
-Created by Brooke Fandrich
+Notes:
 
-## License
+- Supabase and ArcGIS network requests stay network-first.
+- Static local assets are cached for improved repeat load and basic offline shell behavior.
 
-[Add license information if applicable]
+## Run locally
+
+Use any local static server (recommended, do not use file://):
+
+```bash
+python3 -m http.server 8080
+```
+
+Then open `http://localhost:8080`.
+
+## Important operational notes
+
+- Do not put service-role keys in browser code.
+- Keep only the anon public key in [js/config.js](js/config.js).
+- Large base64 images are currently stored directly in `entries.image`; consider moving images to Supabase Storage in a later improvement.

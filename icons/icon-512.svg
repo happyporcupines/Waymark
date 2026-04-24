@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Waymark icon">
+  <rect width="512" height="512" rx="96" fill="#a43855"/>
+  <path d="M256 100c-60.6 0-110 49.4-110 110 0 80 110 201 110 201s110-121 110-201c0-60.6-49.4-110-110-110zm0 151c-22.8 0-41-18.2-41-41s18.2-41 41-41 41 18.2 41 41-18.2 41-41 41z" fill="#fff4f7"/>
+  <text x="256" y="468" text-anchor="middle" font-size="64" font-family="Georgia, serif" fill="#fff4f7">W</text>
+</svg>

@@ -65,15 +65,17 @@ function initMap() {
         'esri/widgets/Expand',
         'esri/Graphic',
         'esri/layers/GraphicsLayer',
+        'esri/geometry/Point',
         'esri/geometry/Polyline',
         'esri/geometry/geometryEngine'
-    ], (Map, MapView, esriConfig, Search, Locate, BasemapGallery, Expand, Graphic, GraphicsLayer, Polyline, geometryEngine) => {
+    ], (Map, MapView, esriConfig, Search, Locate, BasemapGallery, Expand, Graphic, GraphicsLayer, Point, Polyline, geometryEngine) => {
         // SET API KEY: Required for ArcGIS services access
         esriConfig.apiKey = 'AAPTxy8BH1VEsoebNVZXo8HurP99AuF0u6hFXE5XsMHKuzBSGN5LvVSYilawxafx85hn9PCGXebaJHWlitVBT5zeCUaAyEvqj1BxcDK_zJC-tVX6YCERGHXEpZz6YEPcefm_vmXsNbePUUZ7JAXpHdXjsnh5x7OFNgUY22Xi2rwI6cYzTClvMoxyiN9hd4ig364gzmVxs5mLuQQYqSwxcO8eUnY8D8k0W9Tj3o-WFWbJGlMs42rjT9Cgf1AsZxwet7SYAT1_FDERp6GX';
 
         // STORE CONSTRUCTORS GLOBALLY: Save for use in other modules
         GraphicCtor = Graphic;                    // For creating map markers
         GraphicsLayerCtor = GraphicsLayer;         // For story layers
+        PointCtor = Point;                        // For rebuilding points from remote data
         PolylineCtor = Polyline;                  // For drawing story paths
         geometryEngineModule = geometryEngine;     // For distance calculations
 

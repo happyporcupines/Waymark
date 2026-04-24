@@ -420,6 +420,9 @@ function saveStory() {
     }
     // After saving the story, we need to update the graphics on the map to reflect the new story composition
     updateStoryMapGraphics(story);
+    if (typeof queueSupabaseSync === 'function') {
+        queueSupabaseSync();
+    }
     document.getElementById('storyEditModal').style.display = 'none';
     openStoriesModal();
 }
@@ -636,6 +639,9 @@ function toggleStoryVisibility(storyId) {
     if (story) {
         story.visible = !story.visible;
         story.graphicsLayer.visible = story.visible;
+        if (typeof queueSupabaseSync === 'function') {
+            queueSupabaseSync();
+        }
         openStoriesModal();  // Refresh modal to update button text
     }
 }
