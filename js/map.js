@@ -35,7 +35,7 @@ function initMap() {
     console.log('[Waymark] Initializing map...');
     
     // Check if Mapbox GL is available
-    if (typeof mapboxgl === 'undefined') {
+    if (typeof maplibregl === 'undefined') {
         console.error('[Waymark] Mapbox GL library not loaded. Check script tag.');
         return;
     }
@@ -52,7 +52,7 @@ function initMap() {
     
     try {
         // CREATE MAP INSTANCE with Maptiler dataviz style
-        const map = new mapboxgl.Map({
+        const map = new maplibregl.Map({
             container: 'viewDiv',
             style: `https://api.maptiler.com/maps/dataviz/style.json?key=${maptilerKey}`,
             center: [-106.644568, 35.126358],  // Default: New Mexico
@@ -362,7 +362,7 @@ function openEntryPopupMaptiler(pointRecord, entry, lngLat) {
         });
     }
     
-    popup = new mapboxgl.Popup({ offset: 25, closeButton: true })
+    popup = new maplibregl.Popup({ offset: 25, closeButton: true })
         .setLngLat(lngLat)
         .setDOMContent(popupEl)
         .addTo(mapInstance);
@@ -402,7 +402,7 @@ function openEntrySelectorPopupMaptiler(pointRecord, lngLat) {
         });
     });
     
-    popup = new mapboxgl.Popup({ offset: 25, closeButton: true })
+    popup = new maplibregl.Popup({ offset: 25, closeButton: true })
         .setLngLat(lngLat)
         .setDOMContent(popupEl)
         .addTo(mapInstance);
