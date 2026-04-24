@@ -447,13 +447,13 @@ function buildPointGeometry(lat, lon) {
 async function loadSupabaseDataForCurrentUser() {
     const client = getSupabaseClient();
     if (!client || !authenticatedUser) {
-        return;
+        return false;
     }
 
     const mapReady = await waitForMapRuntime();
     if (!mapReady) {
         setAuthStatus('Map took too long to initialize. Refresh and try again.', true);
-        return;
+        return false;
     }
 
     isHydratingRemoteData = true;
@@ -468,7 +468,7 @@ async function loadSupabaseDataForCurrentUser() {
         console.error(entryError);
         setAuthStatus('Could not load your saved entries from Supabase.', true);
         isHydratingRemoteData = false;
-        return;
+        return false;
     }
 
     const { data: storyRows, error: storyError } = await client
@@ -481,7 +481,7 @@ async function loadSupabaseDataForCurrentUser() {
         console.error(storyError);
         setAuthStatus('Could not load your saved stories from Supabase.', true);
         isHydratingRemoteData = false;
-        return;
+        return false;
     }
 
     // Only replace in-memory state after successful remote fetches.
@@ -577,6 +577,7 @@ async function loadSupabaseDataForCurrentUser() {
 
     updateSidebarList();
     isHydratingRemoteData = false;
+    return true;
 }
 
 function serializeEntriesForSync(userId) {
@@ -703,9 +704,12 @@ async function enterAuthenticatedApp(user) {
     enterApp(`User: ${authenticatedUser.email}`, false);
     updateAuthUi();
 
-    if (loadedUserId !== user.id) {
-        loadedUserId = user.id;
-        await loadSupabaseDataForCurrentUser();
+    const shouldLoadRemoteData = loadedUserId !== user.id ||
+        (journalEntries.length === 0 && pointStore.size === 0 && stories.length === 0);
+
+    if (shouldLoadRemoteData) {
+        const didLoadRemoteData = await loadSupabaseDataForCurrentUser();
+        loadedUserId = didLoadRemoteData ? user.id : null;
     }
 }
 
@@ -797,7 +801,7 @@ async function handleLogoutAction() {
     try {
         const client = getSupabaseClient();
         if (client) {
-            await client.auth.signOut();
+            await client.auth.signOut({ scope: 'local' });
         }
     } catch (error) {
         console.error('[Waymark] Logout error:', error);
