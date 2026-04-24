@@ -73,6 +73,7 @@ function initMap() {
         
         map.on('load', () => {
             console.log('[Waymark] Map loaded successfully');
+            mapLoaded = true;
             
             // Add source for entry point markers
             if (!map.getSource('entries')) {

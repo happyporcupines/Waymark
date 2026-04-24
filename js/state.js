@@ -20,6 +20,7 @@
  * @type {boolean}
  */
 let mapInitialized = false;
+let mapLoaded = false;
 
 /**
  * Indicates if the user is in guest mode (no authentication)

@@ -423,8 +423,8 @@ function showLoginScreen() {
 async function waitForMapRuntime(timeoutMs = 15000) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
-        // Check for Mapbox GL map instance (Maptiler uses Mapbox GL)
-        if (mapInstance && typeof mapInstance.getSource === 'function') {
+        // Wait until the map load event has fired and GeoJSON sources are ready
+        if (mapLoaded && mapInstance && typeof mapInstance.getSource === 'function') {
             return true;
         }
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -745,6 +745,27 @@ async function handleSignupAction(email, password) {
     setAuthStatus('Creating account...');
 
     try {
+        // First check if an account already exists for this email by attempting a sign-in.
+        // Supabase with email confirmation enabled won't return an error on duplicate signUp —
+        // it silently sends a confirmation email, making it impossible to detect without this check.
+        const checkResult = await client.auth.signInWithPassword({ email, password: '##WAYMARK_CHECK##' });
+        const checkMsg = checkResult.error?.message || '';
+        const emailExists = checkMsg.toLowerCase().includes('invalid') === false &&
+            !checkMsg.toLowerCase().includes('credentials') &&
+            !checkMsg.toLowerCase().includes('password') &&
+            checkMsg !== '';
+
+        // "Invalid login credentials" means the email has an account (wrong password used here intentionally).
+        // Any other error pattern or no error means something unexpected.
+        const accountExists = checkMsg.toLowerCase().includes('invalid login credentials') ||
+            checkMsg.toLowerCase().includes('invalid credentials') ||
+            checkMsg.toLowerCase().includes('email not confirmed');
+
+        if (accountExists) {
+            setAuthStatus('An account with this email already exists. Please use Log In instead.', true);
+            return;
+        }
+
         const signupResult = await client.auth.signUp({
             email,
             password,
