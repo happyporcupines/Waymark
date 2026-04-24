@@ -1,4 +1,4 @@
-const CACHE_NAME = 'waymark-v7';
+const CACHE_NAME = 'waymark-v9';
 const APP_SHELL_FILES = [
     './',
     './index.html',
@@ -46,23 +46,15 @@ self.addEventListener('fetch', (event) => {
 
     const requestUrl = new URL(event.request.url);
 
-    // Always use network for Supabase and ArcGIS API endpoints.
-    if (requestUrl.hostname.includes('supabase.co') || requestUrl.hostname.includes('arcgis.com')) {
+    // Only serve app shell files from cache. Everything else (APIs, CDNs, tiles) goes to network.
+    if (requestUrl.origin !== self.location.origin) {
         return;
     }
 
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-            return fetch(event.request).then((networkResponse) => {
-                const responseClone = networkResponse.clone();
-                caches.open(CACHE_NAME).then((cache) => {
-                    cache.put(event.request, responseClone);
-                });
-                return networkResponse;
-            });
+            // Return cached version if available, otherwise fetch from network (no dynamic caching)
+            return cachedResponse || fetch(event.request);
         })
     );
 });
