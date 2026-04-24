@@ -180,41 +180,63 @@ function renderProfileImagePreview(imageUrl) {
     }
 }
 
+function compressImageFile(file, maxSide, quality) {
+    return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            var img = new Image();
+            img.onload = function () {
+                var scale = Math.min(maxSide / img.width, maxSide / img.height, 1);
+                var w = Math.max(1, Math.round(img.width * scale));
+                var h = Math.max(1, Math.round(img.height * scale));
+                var canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
 function initializeProfileImageControls() {
-    const inputEl = document.getElementById('profileImageInput');
-    const removeBtn = document.getElementById('removeProfileImageBtn');
+    var inputEl = document.getElementById('profileImageInput');
+    var removeBtn = document.getElementById('removeProfileImageBtn');
 
     if (inputEl) {
-        inputEl.addEventListener('change', (event) => {
-            const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+        inputEl.addEventListener('change', function (event) {
+            var file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
             if (!file) {
                 return;
             }
 
-            const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+            var validTypes = ['image/png', 'image/jpeg', 'image/webp'];
             if (!validTypes.includes(file.type)) {
                 setProfileStatus('Please choose PNG, JPG, or WEBP.', true);
                 inputEl.value = '';
                 return;
             }
 
-            const maxSizeBytes = 2 * 1024 * 1024;
+            var maxSizeBytes = 5 * 1024 * 1024;
             if (file.size > maxSizeBytes) {
-                setProfileStatus('Profile picture must be under 2MB.', true);
+                setProfileStatus('Profile picture must be under 5MB.', true);
                 inputEl.value = '';
                 return;
             }
 
-            const reader = new FileReader();
-            reader.onload = (loadEvent) => {
-                pendingProfileAvatarUrl = String(loadEvent.target && loadEvent.target.result ? loadEvent.target.result : '');
+            setProfileStatus('Processing image...');
+            compressImageFile(file, 128, 0.82).then(function (dataUrl) {
+                pendingProfileAvatarUrl = dataUrl;
                 renderProfileImagePreview(pendingProfileAvatarUrl);
                 setProfileStatus('Profile picture ready to save.');
-            };
-            reader.onerror = () => {
+            }).catch(function () {
                 setProfileStatus('Could not read that image file.', true);
-            };
-            reader.readAsDataURL(file);
+            });
         });
     }
 
@@ -305,11 +327,16 @@ async function saveProfileChanges() {
             data: mergedMetadata
         });
         if (error) {
-            setProfileStatus(error.message || 'Could not update display name.', true);
+            setProfileStatus(error.message || 'Could not update profile.', true);
             return;
         }
         if (data && data.user) {
             authenticatedUser = data.user;
+        }
+        // Always re-fetch to ensure we have the latest metadata
+        const { data: freshData } = await client.auth.getUser();
+        if (freshData && freshData.user) {
+            authenticatedUser = freshData.user;
         }
     }
 
