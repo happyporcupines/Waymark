@@ -52,9 +52,19 @@ self.addEventListener('fetch', (event) => {
     }
 
     event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
-            // Return cached version if available, otherwise fetch from network (no dynamic caching)
-            return cachedResponse || fetch(event.request);
-        })
+        fetch(event.request)
+            .then((networkResponse) => {
+                if (!networkResponse || networkResponse.status !== 200) {
+                    return networkResponse;
+                }
+
+                const responseClone = networkResponse.clone();
+                caches.open(CACHE_NAME).then((cache) => {
+                    cache.put(event.request, responseClone);
+                });
+
+                return networkResponse;
+            })
+            .catch(() => caches.match(event.request))
     );
 });
