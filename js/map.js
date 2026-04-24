@@ -197,10 +197,29 @@ function initMap() {
         container.addEventListener('mouseup', handlePressEnd);
         container.addEventListener('touchend', handlePressEnd);
         container.addEventListener('touchcancel', handlePressEnd);
+
+        function clearLongPressState() {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+
+            longPressStartPoint = null;
+
+            if (longPressIndicator) {
+                longPressIndicator.remove();
+                longPressIndicator = null;
+            }
+        }
         
         function handlePressStart(event) {
             let clientX, clientY;
             if (event.type.startsWith('touch')) {
+                if (event.touches.length !== 1) {
+                    clearLongPressState();
+                    return;
+                }
+
                 if (event.touches.length > 0) {
                     clientX = event.touches[0].clientX;
                     clientY = event.touches[0].clientY;
@@ -256,6 +275,11 @@ function initMap() {
             if (longPressTimer && longPressStartPoint) {
                 let clientX, clientY;
                 if (event.type.startsWith('touch')) {
+                    if (event.touches.length !== 1) {
+                        clearLongPressState();
+                        return;
+                    }
+
                     if (event.touches.length > 0) {
                         clientX = event.touches[0].clientX;
                         clientY = event.touches[0].clientY;
@@ -272,28 +296,13 @@ function initMap() {
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
                 if (distance > MOVE_THRESHOLD) {
-                    clearTimeout(longPressTimer);
-                    longPressTimer = null;
-                    longPressStartPoint = null;
-                    
-                    if (longPressIndicator) {
-                        longPressIndicator.remove();
-                        longPressIndicator = null;
-                    }
+                    clearLongPressState();
                 }
             }
         }
         
         function handlePressEnd(event) {
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-                longPressStartPoint = null;
-            }
-            if (longPressIndicator) {
-                longPressIndicator.remove();
-                longPressIndicator = null;
-            }
+            clearLongPressState();
         }
     }
     } catch (error) {
