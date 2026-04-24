@@ -77,17 +77,24 @@ function getSupabaseClient() {
         return null;
     }
     if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+        console.error('[Waymark] Supabase library not loaded. Check that Supabase JS is included in HTML.');
         return null;
     }
 
     const cfg = window.WAYMARK_CONFIG;
-    supabaseClientInstance = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
-        auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: true
-        }
-    });
+    try {
+        supabaseClientInstance = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        });
+        console.log('[Waymark] Supabase client initialized');
+    } catch (error) {
+        console.error('[Waymark] Failed to initialize Supabase client:', error);
+        return null;
+    }
     return supabaseClientInstance;
 }
 
@@ -729,39 +736,49 @@ async function handleLoginAction(email, password) {
 
     setAuthStatus('Connecting...');
 
-    const loginResult = await client.auth.signInWithPassword({ email, password });
+    try {
+        const loginResult = await client.auth.signInWithPassword({ email, password });
 
-    if (loginResult.error) {
-        const signupResult = await client.auth.signUp({
-            email,
-            password,
-            options: {
-                emailRedirectTo: getAuthRedirectUrl()
+        if (loginResult.error) {
+            const signupResult = await client.auth.signUp({
+                email,
+                password,
+                options: {
+                    emailRedirectTo: getAuthRedirectUrl()
+                }
+            });
+            if (signupResult.error) {
+                setAuthStatus(signupResult.error.message || 'Authentication failed.', true);
+                return;
             }
-        });
-        if (signupResult.error) {
-            setAuthStatus(signupResult.error.message || 'Authentication failed.', true);
+
+            if (!signupResult.data.session) {
+                setAuthStatus('Account created. Check your email to confirm before signing in.');
+                return;
+            }
+
+            await enterAuthenticatedApp(signupResult.data.user);
+            setAuthStatus('Account created and signed in.');
             return;
         }
 
-        if (!signupResult.data.session) {
-            setAuthStatus('Account created. Check your email to confirm before signing in.');
-            return;
-        }
-
-        await enterAuthenticatedApp(signupResult.data.user);
-        setAuthStatus('Account created and signed in.');
-        return;
+        await enterAuthenticatedApp(loginResult.data.user);
+        setAuthStatus('Signed in.');
+    } catch (error) {
+        console.error('[Waymark] Login error:', error);
+        const errorMsg = error?.message || 'Connection failed. Please check your internet connection and try again.';
+        setAuthStatus(errorMsg, true);
     }
-
-    await enterAuthenticatedApp(loginResult.data.user);
-    setAuthStatus('Signed in.');
 }
 
 async function handleLogoutAction() {
-    const client = getSupabaseClient();
-    if (client) {
-        await client.auth.signOut();
+    try {
+        const client = getSupabaseClient();
+        if (client) {
+            await client.auth.signOut();
+        }
+    } catch (error) {
+        console.error('[Waymark] Logout error:', error);
     }
 
     authenticatedUser = null;
@@ -774,6 +791,13 @@ async function handleLogoutAction() {
 }
 
 function initializeSupabaseAuth() {
+    // Check if Supabase library is loaded
+    if (!window.supabase) {
+        console.error('[Waymark] Supabase library not loaded. Check CDN connectivity.');
+        setAuthStatus('Unable to load authentication. Check your internet connection.', true);
+        return;
+    }
+
     if (!isSupabaseConfigured()) {
         setAuthStatus('Supabase is not configured yet. Guest mode is available.');
         return;
