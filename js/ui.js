@@ -355,6 +355,9 @@ function enterApp(userLabel, guestMode) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('mainApp').style.display = 'flex';
     document.getElementById('userInfo').innerText = userLabel;
+    if (typeof updateAuthUi === 'function') {
+        updateAuthUi();
+    }
 
     // Set initial view state: show map, hide sidebar
     document.getElementById('sidebar').classList.remove('active');

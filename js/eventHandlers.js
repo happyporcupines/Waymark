@@ -102,9 +102,6 @@ document.addEventListener('click', (event) => {
     if (target.closest('#navProfile')) {
         if (typeof openProfileModal === 'function') {
             openProfileModal();
-            if (!authenticatedUser) {
-                alert('Sign in to edit your profile.');
-            }
         }
         updateMobileNavState('navProfile');
         return;

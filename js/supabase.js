@@ -27,17 +27,21 @@ function getAuthRedirectUrl() {
 
 function getDisplayNameForUser(user) {
     if (!user) {
-        return 'Profile';
+        return 'add profile details';
     }
     const metadata = user.user_metadata || {};
     const displayName = (metadata.display_name || '').trim();
+    const avatarUrl = (metadata.avatar_url || '').trim();
+
+    // Prompt for profile completion unless BOTH display name and avatar exist.
+    if (!displayName || !avatarUrl) {
+        return 'add profile details';
+    }
+
     if (displayName) {
         return displayName;
     }
-    if (user.email) {
-        return user.email.split('@')[0];
-    }
-    return 'Profile';
+    return 'add profile details';
 }
 
 function getAvatarUrlForUser(user) {
@@ -104,14 +108,13 @@ function updateAuthUi() {
         logoutBtn.style.display = authenticatedUser ? 'inline-block' : 'none';
     }
     if (profileSummaryBtn) {
-        profileSummaryBtn.style.display = authenticatedUser ? 'inline-flex' : 'none';
+        profileSummaryBtn.style.display = 'inline-flex';
+        profileSummaryBtn.setAttribute('aria-disabled', authenticatedUser ? 'false' : 'true');
     }
 
     const userInfoEl = document.getElementById('userInfo');
-    if (userInfoEl && authenticatedUser && authenticatedUser.email) {
-        userInfoEl.innerText = authenticatedUser.email;
-    } else if (userInfoEl) {
-        userInfoEl.innerText = isGuestMode ? 'Guest mode' : 'Not Logged In';
+    if (userInfoEl) {
+        userInfoEl.innerText = '';
     }
 
     if (profileDisplayNameEl) {
@@ -134,6 +137,7 @@ function updateAuthUi() {
 
 function openProfileModal() {
     if (!authenticatedUser) {
+        alert('Sign in to add profile details.');
         return;
     }
     const displayNameInput = document.getElementById('profileDisplayNameInput');
@@ -349,7 +353,6 @@ async function loadSupabaseDataForCurrentUser() {
     }
 
     isHydratingRemoteData = true;
-    clearLocalDataState();
 
     const { data: entryRows, error: entryError } = await client
         .from('entries')
@@ -376,6 +379,9 @@ async function loadSupabaseDataForCurrentUser() {
         isHydratingRemoteData = false;
         return;
     }
+
+    // Only replace in-memory state after successful remote fetches.
+    clearLocalDataState();
 
     let maxEntryId = 0;
     (entryRows || []).forEach((row) => {
@@ -437,8 +443,16 @@ async function loadSupabaseDataForCurrentUser() {
         const storyId = toNumber(row.story_id, nextStoryId);
         maxStoryId = Math.max(maxStoryId, storyId);
 
-        const storyEntryIds = Array.isArray(row.entry_ids)
-            ? row.entry_ids.map((item) => toNumber(item)).filter((item) => Number.isFinite(item))
+        let rawEntryIds = row.entry_ids;
+        if (typeof rawEntryIds === 'string') {
+            try {
+                rawEntryIds = JSON.parse(rawEntryIds);
+            } catch (error) {
+                rawEntryIds = [];
+            }
+        }
+        const storyEntryIds = Array.isArray(rawEntryIds)
+            ? rawEntryIds.map((item) => toNumber(item)).filter((item) => Number.isFinite(item))
             : [];
 
         const graphicsLayer = new GraphicsLayerCtor();
