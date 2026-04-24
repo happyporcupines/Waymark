@@ -75,7 +75,7 @@ CREATE POLICY "stories_select"
     OR is_public = TRUE
     OR EXISTS (
       SELECT 1 FROM public.story_shares
-      WHERE story_shares.story_id = stories.id
+      WHERE story_shares.story_id = stories.story_id
         AND story_shares.shared_with_user_id = auth.uid()
     )
   );
