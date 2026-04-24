@@ -423,11 +423,13 @@ function showLoginScreen() {
 async function waitForMapRuntime(timeoutMs = 15000) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
-        if (appView && appGraphicsLayer && GraphicCtor && GraphicsLayerCtor && PointCtor) {
+        // Check for Mapbox GL map instance (Maptiler uses Mapbox GL)
+        if (mapInstance && typeof mapInstance.getSource === 'function') {
             return true;
         }
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
+    console.error('[Waymark] Map runtime did not initialize within timeout');
     return false;
 }
 
@@ -437,14 +439,9 @@ function toNumber(value, fallback = 0) {
 }
 
 function buildPointGeometry(lat, lon) {
-    if (!PointCtor) {
-        return null;
-    }
-    return new PointCtor({
-        latitude: lat,
-        longitude: lon,
-        spatialReference: { wkid: 4326 }
-    });
+    // Mapbox GL uses [lon, lat] for coordinates
+    // We just store lat/lon here; rendering is done by updateMapEntryMarkers()
+    return { lat, lon };
 }
 
 async function loadSupabaseDataForCurrentUser() {
@@ -539,11 +536,10 @@ async function loadSupabaseDataForCurrentUser() {
 
     nextEntryId = Math.max(maxEntryId + 1, 1);
 
-    pointStore.forEach((pointRecord) => {
-        if (pointRecord.entries.length > 0) {
-            updatePointGraphic(pointRecord);
-        }
-    });
+    // Update map with loaded entry markers using Maptiler GeoJSON
+    if (typeof updateMapEntryMarkers === 'function') {
+        updateMapEntryMarkers();
+    }
 
     let maxStoryId = 0;
     (storyRows || []).forEach((row) => {
@@ -562,28 +558,22 @@ async function loadSupabaseDataForCurrentUser() {
             ? rawEntryIds.map((item) => toNumber(item)).filter((item) => Number.isFinite(item))
             : [];
 
-        const graphicsLayer = new GraphicsLayerCtor();
-        if (mapInstance) {
-            mapInstance.add(graphicsLayer);
-        }
-
         stories.push({
             id: storyId,
             title: row.title || 'Untitled Story',
             entryIds: storyEntryIds,
             visible: row.visible !== false,
             totalMiles: toNumber(row.total_miles, 0),
-            graphicsLayer,
             lineColor: row.line_color || '#a43855'
         });
     });
 
     nextStoryId = Math.max(maxStoryId + 1, 1);
 
-    stories.forEach((story) => {
-        updateStoryMapGraphics(story);
-        story.graphicsLayer.visible = story.visible;
-    });
+    // Update map with loaded story lines using Maptiler GeoJSON
+    if (typeof updateMapStoryLines === 'function') {
+        updateMapStoryLines();
+    }
 
     updateSidebarList();
     isHydratingRemoteData = false;
@@ -809,23 +799,36 @@ function initializeSupabaseAuth() {
         return;
     }
 
+    // Listen for auth state changes (sign in, sign out, token refresh, session restore on page load)
     client.auth.onAuthStateChange(async (event, session) => {
+        console.log('[Waymark] Auth state changed:', event, session ? 'logged in' : 'logged out');
+        
         if (!session || !session.user) {
+            // User is not logged in
             authenticatedUser = null;
             loadedUserId = null;
             updateAuthUi();
+            showLoginScreen();
             return;
         }
 
+        // User has an active session - enter the app
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+            console.log('[Waymark] Restoring session for user:', session.user.email);
             await enterAuthenticatedApp(session.user);
         }
     });
 
-    client.auth.getSession().then(async ({ data }) => {
-        if (data && data.session && data.session.user) {
+    // Also explicitly check for any saved session on page load 
+    // This ensures data loads even if auth state listener hasn't fired yet
+    client.auth.getSession().catch(err => {
+        console.error('[Waymark] Error checking stored session:', err);
+    }).then(async (result = {}) => {
+        const { data } = result;
+        // Only restore if we're not already logged in (avoid double-loading)
+        if (data && data.session && data.session.user && !authenticatedUser) {
+            console.log('[Waymark] Restoring session from storage for:', data.session.user.email);
             await enterAuthenticatedApp(data.session.user);
-            setAuthStatus('Session restored.');
         }
     });
 }
