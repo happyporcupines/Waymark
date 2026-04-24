@@ -107,3 +107,5 @@ Then open `http://localhost:8080`.
 - Do not put service-role keys in browser code.
 - Keep only the anon public key in [js/config.js](js/config.js).
 - Large base64 images are currently stored directly in `entries.image`; consider moving images to Supabase Storage in a later improvement.
+
+Let's try it!
