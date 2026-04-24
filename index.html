@@ -91,6 +91,18 @@
         <label for="profileDisplayNameInput">Display Name</label>
         <input type="text" id="profileDisplayNameInput" placeholder="Your display name" />
 
+        <div class="profile-image-editor">
+            <div id="profileImagePreview" class="profile-image-preview" aria-label="Profile image preview">
+                <img id="profileImagePreviewImg" alt="Profile preview" style="display: none;" />
+                <span id="profileImagePreviewFallback" class="profile-avatar-fallback large" aria-hidden="true">👤</span>
+            </div>
+            <div class="profile-image-controls">
+                <label for="profileImageInput" class="profile-upload-label">Upload Profile Picture</label>
+                <input type="file" id="profileImageInput" accept="image/png,image/jpeg,image/webp" />
+                <button id="removeProfileImageBtn" type="button" class="story-btn-small">Remove Photo</button>
+            </div>
+        </div>
+
         <label for="profileEmailInput">Email Address</label>
         <input type="email" id="profileEmailInput" placeholder="name@example.com" />
 

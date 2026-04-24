@@ -14,6 +14,7 @@ let syncTimer = null;
 let syncInFlight = false;
 let syncQueuedDuringFlight = false;
 let loadedUserId = null;
+let pendingProfileAvatarUrl = '';
 
 const REMOTE_SYNC_DEBOUNCE_MS = 1200;
 
@@ -31,13 +32,6 @@ function getDisplayNameForUser(user) {
     }
     const metadata = user.user_metadata || {};
     const displayName = (metadata.display_name || '').trim();
-    const avatarUrl = (metadata.avatar_url || '').trim();
-
-    // Prompt for profile completion unless BOTH display name and avatar exist.
-    if (!displayName || !avatarUrl) {
-        return 'add profile details';
-    }
-
     if (displayName) {
         return displayName;
     }
@@ -151,7 +145,13 @@ function openProfileModal() {
     }
 
     displayNameInput.value = (authenticatedUser.user_metadata?.display_name || '').trim();
+    pendingProfileAvatarUrl = getAvatarUrlForUser(authenticatedUser) || '';
+    renderProfileImagePreview(pendingProfileAvatarUrl);
     emailInput.value = authenticatedUser.email || '';
+    const profileImageInput = document.getElementById('profileImageInput');
+    if (profileImageInput) {
+        profileImageInput.value = '';
+    }
     if (currentPasswordInput) {
         currentPasswordInput.value = '';
     }
@@ -160,6 +160,74 @@ function openProfileModal() {
     }
     setProfileStatus('');
     profileModal.style.display = 'flex';
+}
+
+function renderProfileImagePreview(imageUrl) {
+    const previewImg = document.getElementById('profileImagePreviewImg');
+    const previewFallback = document.getElementById('profileImagePreviewFallback');
+    if (!previewImg || !previewFallback) {
+        return;
+    }
+
+    if (imageUrl) {
+        previewImg.src = imageUrl;
+        previewImg.style.display = 'block';
+        previewFallback.style.display = 'none';
+    } else {
+        previewImg.removeAttribute('src');
+        previewImg.style.display = 'none';
+        previewFallback.style.display = 'inline-flex';
+    }
+}
+
+function initializeProfileImageControls() {
+    const inputEl = document.getElementById('profileImageInput');
+    const removeBtn = document.getElementById('removeProfileImageBtn');
+
+    if (inputEl) {
+        inputEl.addEventListener('change', (event) => {
+            const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+            if (!file) {
+                return;
+            }
+
+            const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+            if (!validTypes.includes(file.type)) {
+                setProfileStatus('Please choose PNG, JPG, or WEBP.', true);
+                inputEl.value = '';
+                return;
+            }
+
+            const maxSizeBytes = 2 * 1024 * 1024;
+            if (file.size > maxSizeBytes) {
+                setProfileStatus('Profile picture must be under 2MB.', true);
+                inputEl.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (loadEvent) => {
+                pendingProfileAvatarUrl = String(loadEvent.target && loadEvent.target.result ? loadEvent.target.result : '');
+                renderProfileImagePreview(pendingProfileAvatarUrl);
+                setProfileStatus('Profile picture ready to save.');
+            };
+            reader.onerror = () => {
+                setProfileStatus('Could not read that image file.', true);
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    if (removeBtn) {
+        removeBtn.addEventListener('click', () => {
+            pendingProfileAvatarUrl = '';
+            renderProfileImagePreview('');
+            if (inputEl) {
+                inputEl.value = '';
+            }
+            setProfileStatus('Photo will be removed when you save.');
+        });
+    }
 }
 
 function closeProfileModal() {
@@ -193,11 +261,14 @@ async function saveProfileChanges() {
     const newPassword = newPasswordInput ? newPasswordInput.value : '';
 
     const currentEmail = (authenticatedUser.email || '').trim();
+    const currentAvatarUrl = getAvatarUrlForUser(authenticatedUser) || '';
+    const normalizedPendingAvatar = pendingProfileAvatarUrl || '';
     const isEmailChange = !!newEmail && newEmail.toLowerCase() !== currentEmail.toLowerCase();
     const isPasswordChange = !!newPassword;
     const isDisplayNameChange = newDisplayName !== ((authenticatedUser.user_metadata?.display_name || '').trim());
+    const isAvatarChange = normalizedPendingAvatar !== currentAvatarUrl;
 
-    if (!isEmailChange && !isPasswordChange && !isDisplayNameChange) {
+    if (!isEmailChange && !isPasswordChange && !isDisplayNameChange && !isAvatarChange) {
         setProfileStatus('No profile changes to save.');
         return;
     }
@@ -225,9 +296,10 @@ async function saveProfileChanges() {
         }
     }
 
-    if (isDisplayNameChange) {
+    if (isDisplayNameChange || isAvatarChange) {
         const mergedMetadata = Object.assign({}, authenticatedUser.user_metadata || {}, {
-            display_name: newDisplayName
+            display_name: newDisplayName,
+            avatar_url: normalizedPendingAvatar || null
         });
         const { data, error } = await client.auth.updateUser({
             data: mergedMetadata
@@ -270,6 +342,7 @@ async function saveProfileChanges() {
     }
 
     updateAuthUi();
+    pendingProfileAvatarUrl = getAvatarUrlForUser(authenticatedUser) || '';
     if (isEmailChange) {
         setProfileStatus('Saved. Confirm your new email using the link sent to your inbox.');
     } else {
@@ -697,4 +770,5 @@ function initializeSupabaseAuth() {
     });
 }
 
+initializeProfileImageControls();
 initializeSupabaseAuth();

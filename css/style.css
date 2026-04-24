@@ -424,6 +424,48 @@ input, textarea {
     font-size: 0.9em;
 }
 
+.profile-image-editor {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin: 4px 0 8px;
+}
+
+.profile-image-preview {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 2px solid #d9b8c4;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: #fdf7f9;
+}
+
+.profile-image-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-image-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.profile-upload-label {
+    font-weight: bold;
+    color: #5d2637;
+}
+
+#profileImageInput {
+    padding: 0;
+    border: none;
+}
+
 #userInfo {
     display: none;
 }
@@ -804,6 +846,11 @@ input, textarea {
     .profile-summary-btn {
         max-width: 150px;
         padding-right: 8px;
+    }
+
+    .profile-image-editor {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     #userInfo {
