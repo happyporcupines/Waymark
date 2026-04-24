@@ -32,98 +32,127 @@
  * adds GeoJSON sources for entries and stories, and sets up interaction handlers.
  */
 function initMap() {
+    console.log('[Waymark] Initializing map...');
+    
+    // Check if Mapbox GL is available
+    if (typeof mapboxgl === 'undefined') {
+        console.error('[Waymark] Mapbox GL library not loaded. Check script tag.');
+        return;
+    }
+    
     const cfg = window.WAYMARK_CONFIG || {};
     const maptilerKey = cfg.MAPTILER_KEY || '';
     
-    // CREATE MAP INSTANCE with Maptiler dataviz style
-    const map = new mapboxgl.Map({
-        container: 'viewDiv',
-        style: `https://api.maptiler.com/maps/dataviz/style.json?key=${maptilerKey}`,
-        center: [-106.644568, 35.126358],  // Default: New Mexico
-        zoom: 9,
-        pitch: 0,
-        bearing: 0
-    });
+    if (!maptilerKey) {
+        console.error('[Waymark] Maptiler key not configured. Check config.js');
+        return;
+    }
+    
+    console.log('[Waymark] Creating map with Maptiler key:', maptilerKey.substring(0, 10) + '...');
+    
+    try {
+        // CREATE MAP INSTANCE with Maptiler dataviz style
+        const map = new mapboxgl.Map({
+            container: 'viewDiv',
+            style: `https://api.maptiler.com/maps/dataviz/style.json?key=${maptilerKey}`,
+            center: [-106.644568, 35.126358],  // Default: New Mexico
+            zoom: 9,
+            pitch: 0,
+            bearing: 0
+        });
 
-    // Store map globally for use in other modules
-    mapInstance = map;
-    appView = map; // Alias for compatibility
-    
-    // ================================================================
-    // GEOJSON SOURCES & LAYERS
-    // ================================================================
-    
-    map.on('load', () => {
-        // Add source for entry point markers
-        if (!map.getSource('entries')) {
-            map.addSource('entries', {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] }
-            });
-        }
+        // Store map globally for use in other modules
+        mapInstance = map;
+        appView = map; // Alias for compatibility
         
-        // Layer for entry markers
-        if (!map.getLayer('entries-layer')) {
-            map.addLayer({
-                id: 'entries-layer',
-                type: 'circle',
-                source: 'entries',
-                paint: {
-                    'circle-radius': 8,
-                    'circle-color': '#a43855',
-                    'circle-opacity': 0.8,
-                    'circle-stroke-width': 2,
-                    'circle-stroke-color': '#fff'
-                }
-            });
-        }
+        console.log('[Waymark] Map created, waiting for load event...');
         
-        // Source for story lines
-        if (!map.getSource('story-lines')) {
-            map.addSource('story-lines', {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] }
-            });
-        }
+        // ================================================================
+        // GEOJSON SOURCES & LAYERS
+        // ================================================================
         
-        // Layer for story polylines
-        if (!map.getLayer('story-lines-layer')) {
-            map.addLayer({
-                id: 'story-lines-layer',
-                type: 'line',
-                source: 'story-lines',
-                paint: {
-                    'line-color': '#a43855',
-                    'line-width': 3,
-                    'line-opacity': 0.6
-                }
-            }, 'entries-layer');
-        }
-        
-        // Make entry markers interactive
-        map.on('click', 'entries-layer', handleEntryClick);
-        map.on('mouseenter', 'entries-layer', () => {
-            map.getCanvas().style.cursor = 'pointer';
-        });
-        map.on('mouseleave', 'entries-layer', () => {
-            map.getCanvas().style.cursor = '';
-        });
-        
-        // Long-press handler for creating new entries
-        setupLongPressHandler(map);
-        
-        // Attempt to center on user's location
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition((position) => {
-                map.flyTo({
-                    center: [position.coords.longitude, position.coords.latitude],
-                    zoom: 13
+        map.on('load', () => {
+            console.log('[Waymark] Map loaded successfully');
+            
+            // Add source for entry point markers
+            if (!map.getSource('entries')) {
+                map.addSource('entries', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
                 });
-            }, () => {
-                // Geolocation failed, use default center
+            }
+            
+            // Layer for entry markers
+            if (!map.getLayer('entries-layer')) {
+                map.addLayer({
+                    id: 'entries-layer',
+                    type: 'circle',
+                    source: 'entries',
+                    paint: {
+                        'circle-radius': 8,
+                        'circle-color': '#a43855',
+                        'circle-opacity': 0.8,
+                        'circle-stroke-width': 2,
+                        'circle-stroke-color': '#fff'
+                    }
+                });
+            }
+            
+            // Source for story lines
+            if (!map.getSource('story-lines')) {
+                map.addSource('story-lines', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                });
+            }
+            
+            // Layer for story polylines
+            if (!map.getLayer('story-lines-layer')) {
+                map.addLayer({
+                    id: 'story-lines-layer',
+                    type: 'line',
+                    source: 'story-lines',
+                    paint: {
+                        'line-color': '#a43855',
+                        'line-width': 3,
+                        'line-opacity': 0.6
+                    }
+                }, 'entries-layer');
+            }
+            
+            // Make entry markers interactive
+            map.on('click', 'entries-layer', handleEntryClick);
+            map.on('mouseenter', 'entries-layer', () => {
+                map.getCanvas().style.cursor = 'pointer';
             });
-        }
-    });
+            map.on('mouseleave', 'entries-layer', () => {
+                map.getCanvas().style.cursor = '';
+            });
+            
+            // Long-press handler for creating new entries
+            setupLongPressHandler(map);
+            
+            // Attempt to center on user's location
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    map.flyTo({
+                        center: [position.coords.longitude, position.coords.latitude],
+                        zoom: 13
+                    });
+                }, () => {
+                    // Geolocation failed, use default center
+                });
+            }
+        });
+        
+        // Error handler for map
+        map.on('error', (e) => {
+            console.error('[Waymark] Map error:', e.error);
+        });
+    } catch (error) {
+        console.error('[Waymark] Failed to initialize map:', error);
+    }
+}
     
     // ================================================================
     // ENTRY CLICK HANDLER

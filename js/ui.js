@@ -345,6 +345,8 @@ function closeDetailPanel() {
  * enterApp(`User: ${email}`, false);
  */
 function enterApp(userLabel, guestMode) {
+    console.log('[Waymark] Entering app:', userLabel);
+    
     // Set global user mode
     isGuestMode = guestMode;
     if (!isGuestMode) {
@@ -355,17 +357,33 @@ function enterApp(userLabel, guestMode) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('mainApp').style.display = 'flex';
     document.getElementById('userInfo').innerText = userLabel;
+    
     if (typeof updateAuthUi === 'function') {
         updateAuthUi();
     }
 
     // Set initial view state: show map, hide sidebar
     document.getElementById('sidebar').classList.remove('active');
-    document.querySelector('.map-container').style.display = 'block';
+    const mapContainer = document.querySelector('.map-container');
+    if (mapContainer) {
+        mapContainer.style.display = 'block';
+        console.log('[Waymark] Map container shown');
+    } else {
+        console.error('[Waymark] Map container not found in DOM');
+        return;
+    }
 
     // Initialize map on first app entry
     if (!mapInitialized) {
-        initMap();
-        mapInitialized = true;
+        console.log('[Waymark] Initializing map (first entry)...');
+        try {
+            initMap();
+            mapInitialized = true;
+            console.log('[Waymark] Map initialization started');
+        } catch (error) {
+            console.error('[Waymark] Map initialization failed:', error);
+        }
+    } else {
+        console.log('[Waymark] Map already initialized, skipping');
     }
 }
