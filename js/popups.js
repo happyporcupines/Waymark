@@ -146,25 +146,3 @@ function updatePointGraphic(pointRecord) {
         updateMapEntryMarkers();
     }
 }
-            // Add to new layer
-            try {
-                targetLayer.add(pointRecord.graphic);
-            } catch (e) {
-                // Layer add might fail due to graphic already in layer
-            }
-        }
-        
-        // Update the graphic's visual properties and popup
-        pointRecord.graphic.symbol = {
-            type: 'simple-marker',
-            color: targetMarkerColor,
-            outline: { color: [255, 255, 255], width: 2 }
-        };
-        pointRecord.graphic.attributes = { 
-            pointKey: pointRecord.pointKey, 
-            selectedEntryId: latestEntry.id, 
-            title: latestEntry.title 
-        };
-        pointRecord.graphic.popupTemplate = popupTemplate;
-    }
-}

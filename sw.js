@@ -1,4 +1,4 @@
-const CACHE_NAME = 'waymark-v5';
+const CACHE_NAME = 'waymark-v6';
 const APP_SHELL_FILES = [
     './',
     './index.html',
