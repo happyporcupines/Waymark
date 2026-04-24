@@ -1109,3 +1109,192 @@ p, small, span, div, button, input, textarea {
     border-color: #000 !important;
     border-width: 3px !important;
 }
+
+/* ========================================
+   GALLERY
+   ======================================== */
+
+.gallery-box {
+    background: #f4f4f4;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.gallery-header {
+    background: #a43855;
+    color: white;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.gallery-title {
+    margin: 0 0 4px;
+    font-family: 'Alice', serif;
+    font-size: 1.4em;
+}
+
+.gallery-subtitle {
+    margin: 0;
+    font-size: 0.9em;
+    opacity: 0.85;
+}
+
+.gallery-nav {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.gallery-nav-btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.6);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-family: 'Lora', serif;
+    font-weight: bold;
+    min-height: 36px;
+}
+
+.gallery-nav-btn--close {
+    background: rgba(0,0,0,0.2);
+}
+
+.gallery-tabs {
+    display: flex;
+    gap: 0;
+    background: white;
+    border-bottom: 2px solid #e8dce0;
+    flex-shrink: 0;
+    padding: 0 20px;
+}
+
+.gallery-tab {
+    padding: 10px 18px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-family: 'Lora', serif;
+    font-size: 0.95em;
+    color: #666;
+    margin-bottom: -2px;
+}
+
+.gallery-tab--active {
+    color: #a43855;
+    border-bottom-color: #a43855;
+    font-weight: bold;
+}
+
+.gallery-grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+    align-content: start;
+}
+
+.gallery-card {
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    display: flex;
+    flex-direction: column;
+    cursor: default;
+}
+
+.gallery-card-thumb {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    display: block;
+    background: #e8dce0;
+}
+
+.gallery-card-thumb-placeholder {
+    width: 100%;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5em;
+    background: linear-gradient(135deg, #a43855 0%, #d4789a 100%);
+}
+
+.gallery-card-body {
+    padding: 14px 14px 12px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.gallery-card-title {
+    margin: 0 0 6px;
+    font-size: 1.05em;
+    font-family: 'Alice', serif;
+    color: #222;
+}
+
+.gallery-card-desc {
+    margin: 0 0 8px;
+    font-size: 0.85em;
+    color: #555;
+    flex: 1;
+}
+
+.gallery-card-author {
+    font-size: 0.8em;
+    color: #888;
+    font-style: italic;
+}
+
+/* ========================================
+   SHARE CHIPS
+   ======================================== */
+
+.share-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 28px;
+    margin-bottom: 4px;
+}
+
+.share-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f0e4e9;
+    border: 1px solid #d4a0b5;
+    border-radius: 999px;
+    padding: 4px 10px 4px 12px;
+    font-size: 0.875em;
+    color: #5d2637;
+}
+
+.share-chip-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #a43855;
+    font-size: 1em;
+    line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+}

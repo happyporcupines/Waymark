@@ -561,10 +561,14 @@ async function loadSupabaseDataForCurrentUser() {
         stories.push({
             id: storyId,
             title: row.title || 'Untitled Story',
+            description: row.description || '',
             entryIds: storyEntryIds,
             visible: row.visible !== false,
+            isPublic: row.is_public || false,
             totalMiles: toNumber(row.total_miles, 0),
-            lineColor: row.line_color || '#a43855'
+            lineColor: row.line_color || '#a43855',
+            centerLat: row.center_lat || null,
+            centerLon: row.center_lon || null
         });
     });
 
@@ -608,10 +612,14 @@ function serializeStoriesForSync(userId) {
         user_id: userId,
         story_id: story.id,
         title: story.title,
+        description: story.description || '',
         entry_ids: story.entryIds,
         visible: story.visible,
+        is_public: story.isPublic || false,
         total_miles: story.totalMiles,
-        line_color: story.lineColor || '#a43855'
+        line_color: story.lineColor || '#a43855',
+        center_lat: story.centerLat || null,
+        center_lon: story.centerLon || null
     }));
 }
 
@@ -871,3 +879,97 @@ function initializeSupabaseAuth() {
 
 initializeProfileImageControls();
 initializeSupabaseAuth();
+
+// ==========================================
+// GALLERY / SHARE SUPABASE HELPERS
+// ==========================================
+
+async function fetchPublicStories(offset, limit) {
+    offset = offset || 0;
+    limit = limit || 12;
+    const client = getSupabaseClient();
+    if (!client) return { stories: [], profiles: {} };
+    const { data, error } = await client
+        .from('stories')
+        .select('story_id, user_id, title, description, center_lat, center_lon')
+        .eq('is_public', true)
+        .order('story_id', { ascending: false })
+        .range(offset, offset + limit - 1);
+    if (error) { console.warn('fetchPublicStories error', error); return { stories: [], profiles: {} }; }
+    const profiles = await fetchProfilesForUserIds((data || []).map(r => r.user_id));
+    return { stories: data || [], profiles };
+}
+
+async function fetchSharedStories() {
+    const client = getSupabaseClient();
+    if (!client || !authenticatedUser) return { stories: [], profiles: {} };
+    const { data: shares, error: sharesErr } = await client
+        .from('story_shares')
+        .select('story_id, owner_id')
+        .eq('shared_with_user_id', authenticatedUser.id);
+    if (sharesErr || !shares || !shares.length) return { stories: [], profiles: {} };
+    const storyIds = shares.map(s => s.story_id);
+    const { data, error } = await client
+        .from('stories')
+        .select('story_id, user_id, title, description, center_lat, center_lon')
+        .in('story_id', storyIds);
+    if (error) { console.warn('fetchSharedStories error', error); return { stories: [], profiles: {} }; }
+    const profiles = await fetchProfilesForUserIds((data || []).map(r => r.user_id));
+    return { stories: data || [], profiles };
+}
+
+async function fetchProfilesForUserIds(userIds) {
+    if (!userIds || !userIds.length) return {};
+    const unique = [...new Set(userIds)];
+    const client = getSupabaseClient();
+    if (!client) return {};
+    const { data, error } = await client
+        .from('profiles')
+        .select('user_id, display_name')
+        .in('user_id', unique);
+    if (error || !data) return {};
+    const map = {};
+    data.forEach(p => { map[p.user_id] = p; });
+    return map;
+}
+
+async function shareStory(storyId, emails) {
+    const client = getSupabaseClient();
+    if (!client || !authenticatedUser || !emails.length) return { error: 'Not logged in or no emails' };
+    const statusEl = document.getElementById('shareStatus');
+    if (statusEl) statusEl.textContent = 'Looking up recipients...';
+
+    const rows = [];
+    for (const email of emails) {
+        // Look up user ID by email via the DB helper function
+        const { data: uidData } = await client.rpc('get_user_id_by_email', { email_to_find: email });
+        rows.push({
+            story_id: storyId,
+            owner_id: authenticatedUser.id,
+            shared_with_email: email,
+            shared_with_user_id: uidData || null
+        });
+    }
+    const { error } = await client.from('story_shares').upsert(rows, { onConflict: 'story_id,shared_with_email' });
+    if (error) {
+        if (statusEl) statusEl.textContent = 'Error: ' + error.message;
+        return { error };
+    }
+    // Call the Edge Function to send email notifications
+    try {
+        const story = stories.find(s => s.id === storyId);
+        const { data: profile } = await client.from('profiles').select('display_name').eq('user_id', authenticatedUser.id).single();
+        await client.functions.invoke('share-story', {
+            body: {
+                storyTitle: story ? story.title : '',
+                ownerName: (profile && profile.display_name) || authenticatedUser.email,
+                ownerEmail: authenticatedUser.email,
+                recipientEmails: emails
+            }
+        });
+    } catch(e) {
+        console.warn('Edge function error (non-fatal):', e);
+    }
+    if (statusEl) statusEl.textContent = `Invite sent to ${emails.join(', ')}!`;
+    return { success: true };
+}

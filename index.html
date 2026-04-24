@@ -43,8 +43,9 @@
                 <span id="profileDisplayName">Profile</span>
             </button>
         </div>
-        <div style="display: flex; align-items: center; gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <button id="storiesBtn" type="button" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">My Stories 🗺️</button>
+            <button id="galleryBtn" type="button" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Gallery 🌍</button>
             <div id="userInfo">Not Logged In</div>
             <button id="logoutBtn" type="button" style="display: none; background: rgba(0,0,0,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Log Out</button>
         </div>
@@ -212,6 +213,10 @@
         </div>
         
         <p style="font-size: 0.85em; color: #666;">Drag and drop the entries on the right to reorder your journey.</p>
+        <div style="margin-bottom: 12px;">
+            <label for="storyDescriptionInput" style="font-weight: bold; display: block; margin-bottom: 4px;">Description <span style="font-weight: normal; color: #888;">(shown in public gallery)</span></label>
+            <input type="text" id="storyDescriptionInput" placeholder="A short description of your story..." style="width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 15px; -webkit-appearance: none; appearance: none;" />
+        </div>
         <!-- Two columns: available entries and story order (stacks on mobile) -->
         <div style="display: flex; gap: 20px; flex: 1; overflow: hidden; flex-direction: column;">
             <div style="flex: 1; display: flex; flex-direction: column;">
@@ -229,6 +234,46 @@
         <div class="entry-modal-actions">
             <button id="saveStoryBtn" type="button" class="save-btn">Save Story</button>
             <button id="cancelStoryBtn" type="button" class="cancel-btn">Cancel</button>
+        </div>
+    </div>
+</div>
+<!-- Share Story Modal -->
+<div id="shareStoryModal" class="overlay" style="display: none; z-index: 120;">
+    <div class="entry-modal-box" style="max-width: 480px;">
+        <h3 style="margin-top: 0; color: #a43855;">Share Story</h3>
+        <p id="shareStorySubtitle" style="color: #666; margin-bottom: 16px; font-size: 0.95em;"></p>
+        <label for="shareEmailInput" style="font-weight: bold; display: block; margin-bottom: 6px;">Search by email address</label>
+        <input type="email" id="shareEmailInput" placeholder="Enter email and press Enter" style="width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 8px; font-size: 16px; -webkit-appearance: none; appearance: none;" />
+        <div id="shareEmailChips" class="share-chips-container"></div>
+        <p id="shareStatus" style="font-size: 0.85em; min-height: 1.2em; margin: 8px 0; color: #555;"></p>
+        <div class="entry-modal-actions">
+            <button id="cancelShareBtn" type="button" class="cancel-btn">Cancel</button>
+            <button id="sendInviteBtn" type="button" class="save-btn">Send Invite</button>
+        </div>
+    </div>
+</div>
+<!-- Gallery Modal -->
+<div id="galleryModal" class="overlay" style="display: none; z-index: 105;">
+    <div class="gallery-box">
+        <div class="gallery-header">
+            <div>
+                <h2 class="gallery-title">Public Story Gallery</h2>
+                <p class="gallery-subtitle">Explore maps and narratives shared by the community</p>
+            </div>
+            <div class="gallery-nav">
+                <button id="myStoriesFromGalleryBtn" type="button" class="gallery-nav-btn">My Stories</button>
+                <button id="closeGalleryBtn" type="button" class="gallery-nav-btn gallery-nav-btn--close">✕ Close</button>
+            </div>
+        </div>
+        <div class="gallery-tabs">
+            <button id="galleryTabPublic" class="gallery-tab gallery-tab--active" type="button">Public Stories</button>
+            <button id="galleryTabShared" class="gallery-tab" type="button">Shared with Me</button>
+        </div>
+        <div id="galleryGrid" class="gallery-grid">
+            <p style="padding: 40px; text-align: center; color: #888;">Loading stories...</p>
+        </div>
+        <div style="text-align: center; padding: 20px 0 8px;">
+            <button id="loadMoreGalleryBtn" type="button" class="save-btn" style="display: none; min-width: 140px;">Load More</button>
         </div>
     </div>
 </div>

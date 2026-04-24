@@ -155,9 +155,14 @@ function openStoriesModal() {
             
             // BUILD ACTION BUTTONS: Visibility toggle and edit button
             const buttonsDiv = document.createElement('div');
+            buttonsDiv.style.display = 'flex';
+            buttonsDiv.style.gap = '4px';
+            buttonsDiv.style.flexWrap = 'wrap';
             buttonsDiv.innerHTML = `
                 <button class="story-btn-small toggle-story-vis-btn" data-id="${story.id}">${story.visible ? '👁️ Hide' : '👁️‍🗨️ Show'}</button>
                 <button class="story-btn-small edit-story-btn" data-id="${story.id}">Edit</button>
+                <button class="story-btn-small share-story-btn" data-id="${story.id}" data-title="${escapeHtml(story.title)}">Share</button>
+                <button class="story-btn-small make-public-btn" data-id="${story.id}">${story.isPublic ? '🌍 Public' : '🔒 Private'}</button>
             `;
             
             // ASSEMBLE LIST ITEM: Add content and buttons to the container
@@ -231,12 +236,16 @@ function openStoryEditModal(storyId) {
             titleInput.value = story.title;
             colorValue = story.lineColor || '#a43855';
             currentStoryEditEntries = [...story.entryIds];  // Clone array
+            const descInput = document.getElementById('storyDescriptionInput');
+            if (descInput) descInput.value = story.description || '';
         }
     } 
     // CREATE MODE: Clear fields
     else {
         titleInput.value = '';
         colorValue = '#a43855';
+        const descInput = document.getElementById('storyDescriptionInput');
+        if (descInput) descInput.value = '';
     }
     
     // Initialize color picker with current/default color
@@ -389,6 +398,8 @@ function saveStory() {
     const title = document.getElementById('storyTitleInput').value.trim();
     const colorInput = document.getElementById('colorHexInput') || document.getElementById('storyLineColor');
     const colorHex = colorInput ? colorInput.value : '#a43855';
+    const descInput = document.getElementById('storyDescriptionInput');
+    const description = descInput ? descInput.value.trim() : '';
     if (!title) { alert("Give your story a title!"); return; }
 
     // Grab the actual DOM order from the dragged list
@@ -405,13 +416,16 @@ function saveStory() {
         story.title = title;
         story.entryIds = orderedEntryIds;
         story.lineColor = colorHex;
+        story.description = description;
     } else {
         story = {
-            id: nextStoryId++, 
-            title, 
-            entryIds: orderedEntryIds, 
-            visible: true, 
-            totalMiles: 0, 
+            id: nextStoryId++,
+            title,
+            description,
+            entryIds: orderedEntryIds,
+            visible: true,
+            isPublic: false,
+            totalMiles: 0,
             lineColor: colorHex
         };
         stories.push(story);
@@ -612,5 +626,136 @@ function toggleStoryVisibility(storyId) {
             queueSupabaseSync();
         }
         openStoriesModal();  // Refresh modal to update button text
+    }
+}
+
+// ==========================================
+// SHARE STORY MODAL
+// ==========================================
+
+let _currentShareStoryId = null;
+
+function openShareModal(storyId, storyTitle) {
+    _currentShareStoryId = storyId;
+    window._currentShareStoryId = storyId;
+    const modal = document.getElementById('shareStoryModal');
+    const subtitle = document.getElementById('shareStorySubtitle');
+    const chipsContainer = document.getElementById('shareEmailChips');
+    const emailInput = document.getElementById('shareEmailInput');
+    const statusEl = document.getElementById('shareStatus');
+
+    if (!modal) return;
+    subtitle.textContent = `Share "${storyTitle}" with specific users via email`;
+    chipsContainer.innerHTML = '';
+    emailInput.value = '';
+    if (statusEl) statusEl.textContent = '';
+    modal.style.display = 'flex';
+    setTimeout(() => emailInput.focus(), 80);
+}
+
+function addShareChip(email) {
+    const container = document.getElementById('shareEmailChips');
+    if (!container) return;
+    // Prevent duplicates
+    const existing = Array.from(container.querySelectorAll('.share-chip-email')).map(el => el.textContent.trim());
+    if (existing.includes(email)) return;
+    const chip = document.createElement('span');
+    chip.className = 'share-chip';
+    chip.innerHTML = `<span class="share-chip-email">${escapeHtml(email)}</span><button class="share-chip-remove" title="Remove">✕</button>`;
+    chip.querySelector('.share-chip-remove').addEventListener('click', () => chip.remove());
+    container.appendChild(chip);
+}
+
+function getShareChipEmails() {
+    const container = document.getElementById('shareEmailChips');
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('.share-chip-email')).map(el => el.textContent.trim());
+}
+
+// ==========================================
+// SET STORY PUBLIC / PRIVATE
+// ==========================================
+
+function setStoryPublic(storyId, isPublic) {
+    const story = stories.find(s => s.id === storyId);
+    if (!story) return;
+    story.isPublic = isPublic;
+    if (typeof queueSupabaseSync === 'function') queueSupabaseSync();
+    openStoriesModal();
+}
+
+// ==========================================
+// PUBLIC GALLERY MODAL
+// ==========================================
+
+let _galleryOffset = 0;
+let _galleryTab = 'public';
+const GALLERY_PAGE_SIZE = 12;
+
+async function openGalleryModal(tab) {
+    _galleryTab = tab || 'public';
+    _galleryOffset = 0;
+    const modal = document.getElementById('galleryModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    // Tab UI
+    document.getElementById('galleryTabPublic').classList.toggle('gallery-tab--active', _galleryTab === 'public');
+    document.getElementById('galleryTabShared').classList.toggle('gallery-tab--active', _galleryTab === 'shared');
+
+    const grid = document.getElementById('galleryGrid');
+    grid.innerHTML = '<p style="padding: 40px; text-align: center; color: #888; grid-column: 1 / -1;">Loading stories...</p>';
+    document.getElementById('loadMoreGalleryBtn').style.display = 'none';
+
+    await loadGalleryPage(true);
+}
+
+async function loadGalleryPage(reset) {
+    const grid = document.getElementById('galleryGrid');
+    let result;
+    if (_galleryTab === 'shared') {
+        result = typeof fetchSharedStories === 'function' ? await fetchSharedStories() : { stories: [], profiles: {} };
+    } else {
+        result = typeof fetchPublicStories === 'function' ? await fetchPublicStories(_galleryOffset, GALLERY_PAGE_SIZE) : { stories: [], profiles: {} };
+    }
+    const { stories: galleryStories = [], profiles = {} } = result;
+
+    if (reset) grid.innerHTML = '';
+
+    if (!galleryStories.length && reset) {
+        grid.innerHTML = '<p style="padding: 40px; text-align: center; color: #888; grid-column: 1 / -1;">No stories found.</p>';
+        document.getElementById('loadMoreGalleryBtn').style.display = 'none';
+        return;
+    }
+
+    galleryStories.forEach(s => {
+        const authorName = (profiles[s.user_id] || {}).display_name || 'Anonymous';
+        const card = document.createElement('div');
+        card.className = 'gallery-card';
+        const hasCoords = s.center_lat != null && s.center_lon != null;
+        let thumbHtml;
+        if (hasCoords && window.WAYMARK_CONFIG && window.WAYMARK_CONFIG.MAPTILER_KEY) {
+            const imgSrc = `https://api.maptiler.com/maps/dataviz/static/${s.center_lon},${s.center_lat},5/400x160.png?key=${window.WAYMARK_CONFIG.MAPTILER_KEY}`;
+            thumbHtml = `<img class="gallery-card-thumb" src="${imgSrc}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="gallery-card-thumb-placeholder" style="display:none;">🗺️</div>`;
+        } else {
+            thumbHtml = `<div class="gallery-card-thumb-placeholder">🗺️</div>`;
+        }
+        card.innerHTML = `
+            ${thumbHtml}
+            <div class="gallery-card-body">
+                <h4 class="gallery-card-title">${escapeHtml(s.title || 'Untitled')}</h4>
+                <p class="gallery-card-desc">${escapeHtml(s.description || '')}</p>
+                <p class="gallery-card-author">by ${escapeHtml(authorName)}</p>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
+    if (_galleryTab === 'public') {
+        _galleryOffset += galleryStories.length;
+        const loadMoreBtn = document.getElementById('loadMoreGalleryBtn');
+        loadMoreBtn.style.display = galleryStories.length === GALLERY_PAGE_SIZE ? 'inline-block' : 'none';
+    } else {
+        document.getElementById('loadMoreGalleryBtn').style.display = 'none';
     }
 }

@@ -212,6 +212,60 @@ document.addEventListener('click', (event) => {
     if (target.closest('.remove-from-story-btn')) { removeEntryFromStory(parseInt(target.getAttribute('data-id'), 10)); }
     if (target.closest('.toggle-story-vis-btn')) { toggleStoryVisibility(parseInt(target.getAttribute('data-id'), 10)); }
     if (target.closest('.edit-story-btn')) { openStoryEditModal(parseInt(target.getAttribute('data-id'), 10)); }
+
+    // Share story
+    const shareBtn = target.closest('.share-story-btn');
+    if (shareBtn) {
+        const id = parseInt(shareBtn.getAttribute('data-id'), 10);
+        const title = shareBtn.getAttribute('data-title') || '';
+        if (typeof openShareModal === 'function') openShareModal(id, title);
+        return;
+    }
+    // Make public / private toggle
+    const makePublicBtn = target.closest('.make-public-btn');
+    if (makePublicBtn) {
+        const id = parseInt(makePublicBtn.getAttribute('data-id'), 10);
+        const story = (typeof stories !== 'undefined') && stories.find(s => s.id === id);
+        if (story && typeof setStoryPublic === 'function') setStoryPublic(id, !story.isPublic);
+        return;
+    }
+    // Gallery modal
+    if (target.closest('#galleryBtn')) {
+        if (typeof openGalleryModal === 'function') openGalleryModal('public');
+        return;
+    }
+    if (target.closest('#closeGalleryBtn')) { document.getElementById('galleryModal').style.display = 'none'; return; }
+    if (target.closest('#myStoriesFromGalleryBtn')) {
+        document.getElementById('galleryModal').style.display = 'none';
+        openStoriesModal();
+        return;
+    }
+    if (target.closest('#galleryTabPublic')) {
+        if (typeof openGalleryModal === 'function') openGalleryModal('public');
+        return;
+    }
+    if (target.closest('#galleryTabShared')) {
+        if (typeof openGalleryModal === 'function') openGalleryModal('shared');
+        return;
+    }
+    if (target.closest('#loadMoreGalleryBtn')) {
+        if (typeof loadGalleryPage === 'function') loadGalleryPage(false);
+        return;
+    }
+    // Share modal buttons
+    if (target.closest('#cancelShareBtn')) { document.getElementById('shareStoryModal').style.display = 'none'; return; }
+    if (target.closest('#sendInviteBtn')) {
+        const emails = typeof getShareChipEmails === 'function' ? getShareChipEmails() : [];
+        if (!emails.length) { alert('Add at least one email address.'); return; }
+        if (typeof shareStory === 'function') {
+            shareStory(window._currentShareStoryId, emails).then(result => {
+                if (result && result.success) {
+                    setTimeout(() => { document.getElementById('shareStoryModal').style.display = 'none'; }, 1500);
+                }
+            });
+        }
+        return;
+    }
     
     // Color picker modal handlers
     if (target.closest('#openColorPickerBtn') || target.id === 'colorPreview') {
@@ -372,6 +426,20 @@ document.addEventListener('keydown', (event) => {
         // Don't prevent default - let the browser handle it naturally
         // The issue was likely preventDefault breaking mobile keyboard behavior
         return;
+    }
+});
+
+// Share email chip - add chip on Enter or comma
+document.addEventListener('keydown', (event) => {
+    const input = document.getElementById('shareEmailInput');
+    if (!input || event.target !== input) return;
+    if (event.key === 'Enter' || event.key === ',') {
+        event.preventDefault();
+        const email = input.value.trim().replace(/,$/, '');
+        if (email && email.includes('@') && typeof addShareChip === 'function') {
+            addShareChip(email);
+            input.value = '';
+        }
     }
 });
 
