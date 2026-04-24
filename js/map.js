@@ -149,42 +149,38 @@ function initMap() {
         map.on('error', (e) => {
             console.error('[Waymark] Map error:', e.error);
         });
-    } catch (error) {
-        console.error('[Waymark] Failed to initialize map:', error);
-    }
-}
-    
-    // ================================================================
-    // ENTRY CLICK HANDLER
-    // ================================================================
-    
-    function handleEntryClick(e) {
-        const feature = e.features[0];
-        if (!feature) return;
         
-        const pointKey = feature.properties.pointKey;
-        if (!pointStore.has(pointKey)) return;
+        // ================================================================
+        // ENTRY CLICK HANDLER
+        // ================================================================
         
-        const pointRecord = pointStore.get(pointKey);
-        
-        // MULTIPLE ENTRIES: Show selector popup
-        if (pointRecord.entries.length > 1) {
-            openEntrySelectorPopupMaptiler(pointRecord, e.lngLat);
-        } 
-        // SINGLE ENTRY: Show entry popup directly
-        else {
-            const latestEntry = getLatestEntry(pointRecord);
-            if (latestEntry) {
-                openEntryPopupMaptiler(pointRecord, latestEntry, e.lngLat);
+        function handleEntryClick(e) {
+            const feature = e.features[0];
+            if (!feature) return;
+            
+            const pointKey = feature.properties.pointKey;
+            if (!pointStore.has(pointKey)) return;
+            
+            const pointRecord = pointStore.get(pointKey);
+            
+            // MULTIPLE ENTRIES: Show selector popup
+            if (pointRecord.entries.length > 1) {
+                openEntrySelectorPopupMaptiler(pointRecord, e.lngLat);
+            } 
+            // SINGLE ENTRY: Show entry popup directly
+            else {
+                const latestEntry = getLatestEntry(pointRecord);
+                if (latestEntry) {
+                    openEntryPopupMaptiler(pointRecord, latestEntry, e.lngLat);
+                }
             }
         }
-    }
-    
-    // ================================================================
-    // LONG-PRESS HANDLER
-    // ================================================================
-    
-    function setupLongPressHandler(map) {
+        
+        // ================================================================
+        // LONG-PRESS HANDLER
+        // ================================================================
+        
+        function setupLongPressHandler(map) {
         let longPressTimer = null;
         let longPressStartPoint = null;
         let longPressIndicator = null;
@@ -298,6 +294,9 @@ function initMap() {
                 longPressIndicator = null;
             }
         }
+    }
+    } catch (error) {
+        console.error('[Waymark] Failed to initialize map:', error);
     }
 }
 
