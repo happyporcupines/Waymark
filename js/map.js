@@ -1,14 +1,13 @@
 /**
  * ============================================================================
- * MAP.JS - ArcGIS Map Initialization & Interaction Handlers
+ * MAP.JS - Maptiler (Mapbox GL) Map Initialization & Interaction Handlers
  * ============================================================================
  * 
- * This file initializes and configures the ArcGIS JavaScript API map, which is
+ * This file initializes and configures the Maptiler map, which is
  * the core geographic component of Waymark. It handles:
  * 
- * - Loading ArcGIS modules via AMD require()
- * - Creating the map and view instances
- * - Adding widgets (Search, Locate, Basemap Gallery)
+ * - Loading Maptiler (Mapbox GL) with dataviz style
+ * - Creating GeoJSON sources for entries and stories
  * - Setting up click and long-press event handlers
  * - Managing popup interactions
  * 
@@ -27,283 +26,153 @@
 // ============================================================================
 
 /**
- * Initializes the ArcGIS map and sets up all event handlers
+ * Initializes the Maptiler map and sets up all event handlers
  * 
- * This is the main initialization function called when the user enters the app.
- * It performs several critical setup tasks:
- * 
- * MODULE LOADING:
- * Uses AMD-style require() to load ArcGIS modules asynchronously.
- * Modules are stored in global variables for use throughout the app.
- * 
- * MAP CREATION:
- * - Creates Map instance with basemap
- * - Creates MapView with center and zoom
- * - Adds graphics layer for entry markers
- * 
- * WIDGETS:
- * - Search: Location search in header
- * - Locate: GPS location button
- * - BasemapGallery: Style switcher
- * 
- * EVENT HANDLERS:
- * - Popup action handlers (read, edit, add)
- * - Click handler for selecting entries
- * - Long-press handler for creating entries
- * 
- * The function is called only once per session (tracked by mapInitialized flag).
+ * Creates a Mapbox GL map instance using Maptiler's dataviz style,
+ * adds GeoJSON sources for entries and stories, and sets up interaction handlers.
  */
 function initMap() {
-    // LOAD ARCGIS MODULES: Use AMD require() pattern
-    require([
-        'esri/Map',
-        'esri/views/MapView',
-        'esri/config',
-        'esri/widgets/Search',
-        'esri/widgets/Locate',
-        'esri/widgets/BasemapGallery',
-        'esri/widgets/Expand',
-        'esri/Graphic',
-        'esri/layers/GraphicsLayer',
-        'esri/geometry/Point',
-        'esri/geometry/Polyline',
-        'esri/geometry/geometryEngine'
-    ], (Map, MapView, esriConfig, Search, Locate, BasemapGallery, Expand, Graphic, GraphicsLayer, Point, Polyline, geometryEngine) => {
-        // SET API KEY: Required for ArcGIS services access
-        esriConfig.apiKey = 'AAPTxy8BH1VEsoebNVZXo8HurP99AuF0u6hFXE5XsMHKuzBSGN5LvVSYilawxafx85hn9PCGXebaJHWlitVBT5zeCUaAyEvqj1BxcDK_zJC-tVX6YCERGHXEpZz6YEPcefm_vmXsNbePUUZ7JAXpHdXjsnh5x7OFNgUY22Xi2rwI6cYzTClvMoxyiN9hd4ig364gzmVxs5mLuQQYqSwxcO8eUnY8D8k0W9Tj3o-WFWbJGlMs42rjT9Cgf1AsZxwet7SYAT1_FDERp6GX';
+    const cfg = window.WAYMARK_CONFIG || {};
+    const maptilerKey = cfg.MAPTILER_KEY || '';
+    
+    // CREATE MAP INSTANCE with Maptiler dataviz style
+    const map = new mapboxgl.Map({
+        container: 'viewDiv',
+        style: `https://api.maptiler.com/maps/dataviz/style.json?key=${maptilerKey}`,
+        center: [-106.644568, 35.126358],  // Default: New Mexico
+        zoom: 9,
+        pitch: 0,
+        bearing: 0
+    });
 
-        // STORE CONSTRUCTORS GLOBALLY: Save for use in other modules
-        GraphicCtor = Graphic;                    // For creating map markers
-        GraphicsLayerCtor = GraphicsLayer;         // For story layers
-        PointCtor = Point;                        // For rebuilding points from remote data
-        PolylineCtor = Polyline;                  // For drawing story paths
-        geometryEngineModule = geometryEngine;     // For distance calculations
-
-        // CREATE MAIN GRAPHICS LAYER: Holds entry point markers
-        appGraphicsLayer = new GraphicsLayer();
-
-        // CREATE MAP INSTANCE: Configure basemap and add graphics layer
-        const map = new Map({
-            basemap: 'arcgis-midcentury',    // Stylish vintage basemap
-            layers: [appGraphicsLayer]        // Add main graphics layer
-        });
-
-        mapInstance = map; // Save globally for adding story layers later
+    // Store map globally for use in other modules
+    mapInstance = map;
+    appView = map; // Alias for compatibility
+    
+    // ================================================================
+    // GEOJSON SOURCES & LAYERS
+    // ================================================================
+    
+    map.on('load', () => {
+        // Add source for entry point markers
+        if (!map.getSource('entries')) {
+            map.addSource('entries', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+        }
         
-        // CREATE MAPVIEW: Configure viewport and interaction settings
-        const view = new MapView({
-            map,
-            center: [-106.644568, 35.126358],  // Default: New Mexico
-            zoom: 9,                            // Comfortable regional view
-            container: 'viewDiv'                // DOM element ID
-        });
-        
-        // DISABLE DEFAULT POPUP: We manage popups manually for custom behavior
-        view.popup.autoOpenEnabled = false;
-        
-        // SAVE VIEW GLOBALLY: Needed for programmatic map operations
-        appView = view;
-        // ================================================================
-        // WIDGET CONFIGURATION
-        // ================================================================
-        
-        // SEARCH WIDGET: Add location search to sidebar header
-        new Search({ view, container: 'searchContainer' });
-        
-        // LOCATE WIDGET: GPS location button for mobile/desktop
-        const locateBtn = new Locate({ view });
-        
-        // BASEMAP GALLERY: Let users switch map styles
-        const basemapGallery = new BasemapGallery({ view });
-        
-        // CREATE WIDGET CONTAINER: Custom DOM element for bottom-right controls
-        const widgetRow = document.createElement('div');
-        widgetRow.className = 'map-widget-row';
-        
-        // Separate containers prevent widget styling conflicts
-        const locateContainer = document.createElement('div');
-        const basemapContainer = document.createElement('div');
-        widgetRow.appendChild(locateContainer);
-        widgetRow.appendChild(basemapContainer);
-        
-        // Attach widgets to their containers
-        locateBtn.container = locateContainer;
-        
-        // Wrap BasemapGallery in Expand widget to save space
-        new Expand({
-            view,
-            content: basemapGallery,
-            container: basemapContainer,
-            autoCollapse: true  // Close after selection
-        });
-        
-        // Add widget row to map view
-        view.ui.add(widgetRow, { position: 'bottom-right', index: 0 });
-        // ================================================================
-        // INITIAL USER LOCATION
-        // ================================================================
-        
-        // When map is ready, attempt to center on user's location
-        // Try GPS first, fall back to browser geolocation if denied
-        view.when(() => {
-            locateBtn.locate().catch(() => {
-                // Fallback to browser geolocation if GPS permission denied
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition((position) => {
-                        view.goTo({
-                            center: [position.coords.longitude, position.coords.latitude],
-                            zoom: 13
-                        });
-                    });
+        // Layer for entry markers
+        if (!map.getLayer('entries-layer')) {
+            map.addLayer({
+                id: 'entries-layer',
+                type: 'circle',
+                source: 'entries',
+                paint: {
+                    'circle-radius': 8,
+                    'circle-color': '#a43855',
+                    'circle-opacity': 0.8,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#fff'
                 }
             });
-        });
-        // ================================================================
-        // POPUP ACTION HANDLERS
-        // ================================================================
+        }
         
-        /**
-         * Handles user clicks on action buttons within map popups
-         * 
-         * Actions available:
-         * - 'read-full-entry': Opens detail panel with complete entry content
-         * - 'edit-entry': Opens entry modal pre-filled for editing
-         * - 'add-same-point': Creates new entry at same geographic location
-         * - 'close-popup': Closes the popup
-         * 
-         * The handler:
-         * 1. Gets the selected graphic from popup
-         * 2. Finds the point record using pointKey attribute
-         * 3. Finds the specific entry using selectedEntryId
-         * 4. Calls appropriate function based on action ID
-         */
-        view.popup.on('trigger-action', (popupEvent) => {
-            if (popupEvent.action.id === 'close-popup') {
-                view.popup.close();
-                return;
-            }
-            // Get the selected graphic from the popup, and ensure it has the necessary attributes to identify the point and entry
-            const selectedGraphic = view.popup.selectedFeature;
-            if (!selectedGraphic) {
-                return;
-            }
-            // Use the pointKey attribute from the graphic to find the corresponding point record in our pointStore; if it doesn't exist, we can't proceed
-            const pointKey = selectedGraphic.attributes.pointKey;
-            if (!pointStore.has(pointKey)) {
-                return;
-            }
-            // With the point record in hand, we can find the specific entry that was selected in the popup using the selectedEntryId attribute
-            // if we can't find it, we can't proceed
-            const pointRecord = pointStore.get(pointKey);
-            const selectedEntry = findEntryById(pointRecord, selectedGraphic.attributes.selectedEntryId);
-            // Depending on which action was triggered in the popup, we call the appropriate function to either open the detail panel,
-            // open the entry modal for editing, or open the entry modal for adding a new entry at the same point
-            if (!selectedEntry) {
-                return;
-            }
-            // Handle the different popup actions based on the action ID
-            if (popupEvent.action.id === 'read-full-entry') {
-                openDetailPanel(pointRecord, selectedEntry);
-            }
-            // When the user clicks "Edit entry" in the popup, we want to open the entry modal pre-filled with the selected entry's data for editing
-            if (popupEvent.action.id === 'edit-entry') {
-                openEntryModal('edit', pointRecord, selectedEntry);
-            }
-            // When the user clicks "Add new entry to same point" in the popup, we want to open the entry modal for creating a new entry,
-            if (popupEvent.action.id === 'add-same-point') {
-                currentClickCoords = {
-                    lat: pointRecord.lat,
-                    lon: pointRecord.lon,
-                    mapPoint: pointRecord.mapPoint
-                };
-                openEntryModal('new', pointRecord, null);
-            }
-        });
-        // ================================================================
-        // CLICK HANDLER: Select existing entries
-        // ================================================================
-        
-        /**
-         * Single-click handler for selecting existing entry markers
-         * 
-         * Using single click instead of double-click for better mobile experience.
-         * The handler:
-         * 1. Performs hit test to check if click landed on a graphic
-         * 2. Filters for graphics with pointKey attribute (entry markers)
-         * 3. Opens popup (selector if multiple entries, direct if single)
-         * 
-         * If user clicks on empty map area, nothing happens (long-press creates new entry).
-         */
-        view.on('click', async (event) => {
-            const hitResponse = await view.hitTest(event);
-            
-            // Find if click landed on an entry marker graphic
-            const graphicResult = hitResponse.results.find((result) => {
-                const graphic = result && result.graphic ? result.graphic : null;
-                if (!graphic || !graphic.attributes) {
-                    return false;
-                }
-                // Only consider graphics with pointKey (entry markers, not other graphics)
-                return !!graphic.attributes.pointKey && pointStore.has(graphic.attributes.pointKey);
+        // Source for story lines
+        if (!map.getSource('story-lines')) {
+            map.addSource('story-lines', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
             });
-            
-            // If the user clicked on an existing entry marker
-            if (graphicResult) {
-                const pointKey = graphicResult.graphic.attributes.pointKey;
-                if (!pointStore.has(pointKey)) {
-                    return;
+        }
+        
+        // Layer for story polylines
+        if (!map.getLayer('story-lines-layer')) {
+            map.addLayer({
+                id: 'story-lines-layer',
+                type: 'line',
+                source: 'story-lines',
+                paint: {
+                    'line-color': '#a43855',
+                    'line-width': 3,
+                    'line-opacity': 0.6
                 }
-                const pointRecord = pointStore.get(pointKey);
-                
-                // MULTIPLE ENTRIES: Show selector popup
-                if (pointRecord.entries.length > 1) {
-                    openEntrySelectorPopup(pointRecord, event.mapPoint);
-                } 
-                // SINGLE ENTRY: Show entry popup directly
-                else {
-                    const latestEntry = getLatestEntry(pointRecord);
-                    if (latestEntry) {
-                        openEntryPopup(pointRecord, latestEntry, event.mapPoint);
-                    }
-                }
-            }
+            }, 'entries-layer');
+        }
+        
+        // Make entry markers interactive
+        map.on('click', 'entries-layer', handleEntryClick);
+        map.on('mouseenter', 'entries-layer', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', 'entries-layer', () => {
+            map.getCanvas().style.cursor = '';
         });
         
-        // ================================================================
-        // LONG-PRESS HANDLER: Create new entries
-        // ================================================================
+        // Long-press handler for creating new entries
+        setupLongPressHandler(map);
         
-        /**
-         * Long-press (click and hold) handler for creating new diary entries
-         * 
-         * Long-press pattern:
-         * - Press duration: 800ms
-         * - Movement threshold: 10 pixels
-         * - Visual feedback: Growing circular indicator
-         * 
-         * This avoids conflicts with pan/zoom gestures and provides clear
-         * visual feedback on mobile devices.
-         * 
-         * The handler uses standard DOM events (mousedown/touchstart) instead
-         * of ArcGIS pointer events for better mobile compatibility.
-         */
+        // Attempt to center on user's location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                map.flyTo({
+                    center: [position.coords.longitude, position.coords.latitude],
+                    zoom: 13
+                });
+            }, () => {
+                // Geolocation failed, use default center
+            });
+        }
+    });
+    
+    // ================================================================
+    // ENTRY CLICK HANDLER
+    // ================================================================
+    
+    function handleEntryClick(e) {
+        const feature = e.features[0];
+        if (!feature) return;
+        
+        const pointKey = feature.properties.pointKey;
+        if (!pointStore.has(pointKey)) return;
+        
+        const pointRecord = pointStore.get(pointKey);
+        
+        // MULTIPLE ENTRIES: Show selector popup
+        if (pointRecord.entries.length > 1) {
+            openEntrySelectorPopupMaptiler(pointRecord, e.lngLat);
+        } 
+        // SINGLE ENTRY: Show entry popup directly
+        else {
+            const latestEntry = getLatestEntry(pointRecord);
+            if (latestEntry) {
+                openEntryPopupMaptiler(pointRecord, latestEntry, e.lngLat);
+            }
+        }
+    }
+    
+    // ================================================================
+    // LONG-PRESS HANDLER
+    // ================================================================
+    
+    function setupLongPressHandler(map) {
         let longPressTimer = null;
         let longPressStartPoint = null;
         let longPressIndicator = null;
-        const LONG_PRESS_DURATION = 800; // milliseconds
-        const MOVE_THRESHOLD = 10; // pixels
+        const LONG_PRESS_DURATION = 800;
+        const MOVE_THRESHOLD = 10;
         
-        // Use standard DOM events on the container for better compatibility
-        view.container.addEventListener('mousedown', handlePressStart);
-        view.container.addEventListener('touchstart', handlePressStart);
-        view.container.addEventListener('mousemove', handlePressMove);
-        view.container.addEventListener('touchmove', handlePressMove);
-        view.container.addEventListener('mouseup', handlePressEnd);
-        view.container.addEventListener('touchend', handlePressEnd);
-        view.container.addEventListener('touchcancel', handlePressEnd);
+        const container = map.getCanvasContainer();
+        
+        container.addEventListener('mousedown', handlePressStart);
+        container.addEventListener('touchstart', handlePressStart);
+        container.addEventListener('mousemove', handlePressMove);
+        container.addEventListener('touchmove', handlePressMove);
+        container.addEventListener('mouseup', handlePressEnd);
+        container.addEventListener('touchend', handlePressEnd);
+        container.addEventListener('touchcancel', handlePressEnd);
         
         function handlePressStart(event) {
-            // Get coordinates from mouse or touch event
             let clientX, clientY;
             if (event.type.startsWith('touch')) {
                 if (event.touches.length > 0) {
@@ -317,26 +186,22 @@ function initMap() {
                 clientY = event.clientY;
             }
             
-            // Convert to screen coordinates relative to the view
-            const rect = view.container.getBoundingClientRect();
+            const rect = container.getBoundingClientRect();
             const x = clientX - rect.left;
             const y = clientY - rect.top;
             
-            // Get the map point
-            const mapPoint = view.toMap({ x, y });
-            if (!mapPoint) return;
+            const lngLat = map.unproject([x, y]);
             
-            longPressStartPoint = { x, y, clientX, clientY, mapPoint };
+            longPressStartPoint = { x, y, clientX, clientY, lngLat };
             
             // Create visual indicator
             longPressIndicator = document.createElement('div');
             longPressIndicator.className = 'long-press-indicator';
             longPressIndicator.style.left = x + 'px';
             longPressIndicator.style.top = y + 'px';
-            view.container.appendChild(longPressIndicator);
+            container.appendChild(longPressIndicator);
             
             longPressTimer = setTimeout(() => {
-                // Long press triggered - create new entry
                 if (longPressIndicator) {
                     longPressIndicator.remove();
                     longPressIndicator = null;
@@ -348,22 +213,20 @@ function initMap() {
                 }
                 
                 currentClickCoords = {
-                    lat: roundCoord(longPressStartPoint.mapPoint.latitude),
-                    lon: roundCoord(longPressStartPoint.mapPoint.longitude),
-                    mapPoint: longPressStartPoint.mapPoint
+                    lat: roundCoord(longPressStartPoint.lngLat.lat),
+                    lon: roundCoord(longPressStartPoint.lngLat.lng),
+                    mapPoint: longPressStartPoint.lngLat
                 };
                 
                 const pointRecord = getOrCreatePointRecord(currentClickCoords);
                 openEntryModal('new', pointRecord, null);
                 
-                // Clear the timer so pointer-up doesn't do anything
                 longPressTimer = null;
                 longPressStartPoint = null;
             }, LONG_PRESS_DURATION);
         }
         
         function handlePressMove(event) {
-            // Cancel long press if user moves too much
             if (longPressTimer && longPressStartPoint) {
                 let clientX, clientY;
                 if (event.type.startsWith('touch')) {
@@ -396,17 +259,198 @@ function initMap() {
         }
         
         function handlePressEnd(event) {
-            // Cancel long press on release
             if (longPressTimer) {
                 clearTimeout(longPressTimer);
                 longPressTimer = null;
                 longPressStartPoint = null;
             }
-            
             if (longPressIndicator) {
                 longPressIndicator.remove();
                 longPressIndicator = null;
             }
         }
+    }
+}
+
+/**
+ * Opens a popup for a specific entry (Maptiler version)
+ */
+function openEntryPopupMaptiler(pointRecord, entry, lngLat) {
+    if (!mapInstance) return;
+    
+    const pointStory = findStoryForEntry(entry);
+    const template = buildEntryPopupTemplate(entry, pointStory);
+    
+    let htmlContent = '';
+    if (template.title) {
+        htmlContent += `<h3 style="margin: 0 0 8px; font-size: 1em;">${escapeHtml(template.title)}</h3>`;
+    }
+    
+    const content = template.content || '';
+    if (typeof content === 'string') {
+        htmlContent += content;
+    }
+    
+    htmlContent += '<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;">';
+    htmlContent += '<button class="popup-action-btn" data-action="read-full-entry" style="flex: 1; padding: 6px 8px; background: #a43855; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Read</button>';
+    htmlContent += '<button class="popup-action-btn" data-action="edit-entry" style="flex: 1; padding: 6px 8px; background: #a43855; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Edit</button>';
+    htmlContent += '<button class="popup-action-btn" data-action="add-same-point" style="flex: 1; padding: 6px 8px; background: #a43855; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Add</button>';
+    htmlContent += '</div>';
+    
+    const popupEl = document.createElement('div');
+    popupEl.className = 'maptiler-entry-popup';
+    popupEl.style.maxWidth = '300px';
+    popupEl.innerHTML = htmlContent;
+    
+    const readBtn = popupEl.querySelector('[data-action="read-full-entry"]');
+    const editBtn = popupEl.querySelector('[data-action="edit-entry"]');
+    const addBtn = popupEl.querySelector('[data-action="add-same-point"]');
+    
+    let popup = null;
+    
+    if (readBtn) {
+        readBtn.addEventListener('click', () => {
+            openDetailPanel(pointRecord, entry);
+            if (popup) popup.remove();
+        });
+    }
+    
+    if (editBtn) {
+        editBtn.addEventListener('click', () => {
+            openEntryModal('edit', pointRecord, entry);
+            if (popup) popup.remove();
+        });
+    }
+    
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            currentClickCoords = {
+                lat: roundCoord(pointRecord.lat),
+                lon: roundCoord(pointRecord.lon),
+                mapPoint: lngLat
+            };
+            openEntryModal('new', pointRecord, null);
+            if (popup) popup.remove();
+        });
+    }
+    
+    popup = new mapboxgl.Popup({ offset: 25, closeButton: true })
+        .setLngLat(lngLat)
+        .setDOMContent(popupEl)
+        .addTo(mapInstance);
+}
+
+/**
+ * Opens a multi-entry selector popup (Maptiler version)
+ */
+function openEntrySelectorPopupMaptiler(pointRecord, lngLat) {
+    if (!mapInstance) return;
+    
+    let htmlContent = '<div style="max-width: 280px;">';
+    htmlContent += '<p style="margin: 0 0 10px; font-weight: bold; font-size: 0.95em;">Choose an entry:</p>';
+    
+    pointRecord.entries.forEach((entry) => {
+        const dateStr = new Date(entry.createdAt).toLocaleDateString();
+        htmlContent += `<button class="popup-entry-choice" data-entry-id="${entry.id}" style="display: block; width: 100%; text-align: left; padding: 8px; margin-bottom: 6px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 0.9em;">`;
+        htmlContent += `<strong>${escapeHtml(entry.title)}</strong><br><small style="color: #666;">${dateStr}</small>`;
+        htmlContent += '</button>';
     });
+    
+    htmlContent += '</div>';
+    
+    const popupEl = document.createElement('div');
+    popupEl.innerHTML = htmlContent;
+    
+    let popup = null;
+    
+    popupEl.querySelectorAll('.popup-entry-choice').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const entryId = parseInt(btn.getAttribute('data-entry-id'), 10);
+            const entry = pointRecord.entries.find(e => e.id === entryId);
+            if (entry) {
+                openEntryPopupMaptiler(pointRecord, entry, lngLat);
+            }
+            if (popup) popup.remove();
+        });
+    });
+    
+    popup = new mapboxgl.Popup({ offset: 25, closeButton: true })
+        .setLngLat(lngLat)
+        .setDOMContent(popupEl)
+        .addTo(mapInstance);
+}
+
+/**
+ * Updates entry markers on the map from the pointStore
+ */
+function updateMapEntryMarkers() {
+    if (!mapInstance || !mapInstance.getSource) return;
+    
+    const features = [];
+    pointStore.forEach((pointRecord) => {
+        pointRecord.entries.forEach((entry) => {
+            features.push({
+                type: 'Feature',
+                geometry: {
+                    type: 'Point',
+                    coordinates: [pointRecord.lon, pointRecord.lat]
+                },
+                properties: {
+                    pointKey: pointRecord.pointKey,
+                    entryCount: pointRecord.entries.length
+                }
+            });
+        });
+    });
+    
+    const source = mapInstance.getSource('entries');
+    if (source) {
+        source.setData({
+            type: 'FeatureCollection',
+            features: features
+        });
+    }
+}
+
+/**
+ * Updates story lines on the map from the stories array
+ */
+function updateMapStoryLines() {
+    if (!mapInstance || !mapInstance.getSource) return;
+    
+    const features = [];
+    
+    stories.forEach((story) => {
+        const coords = [];
+        story.entryIds.forEach((entryId) => {
+            pointStore.forEach((pointRecord) => {
+                const entry = pointRecord.entries.find(e => e.id === entryId);
+                if (entry) {
+                    coords.push([pointRecord.lon, pointRecord.lat]);
+                }
+            });
+        });
+        
+        if (coords.length > 1) {
+            features.push({
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: coords
+                },
+                properties: {
+                    storyId: story.id,
+                    color: story.lineColor
+                }
+            });
+        }
+    });
+    
+    const source = mapInstance.getSource('story-lines');
+    if (source) {
+        source.setData({
+            type: 'FeatureCollection',
+            features: features
+        });
+    }
 }

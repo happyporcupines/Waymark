@@ -46,6 +46,34 @@ function buildPointKey(lat, lon) {
     return `${roundCoord(lat)},${roundCoord(lon)}`;
 }
 
+/**
+ * Calculates the great-circle distance between two points on Earth in miles
+ * 
+ * Uses the haversine formula for accurate geodesic distance calculation.
+ * This replaces ArcGIS geometryEngine for Maptiler compatibility.
+ * 
+ * @param {number} lat1 - First point latitude
+ * @param {number} lon1 - First point longitude
+ * @param {number} lat2 - Second point latitude
+ * @param {number} lon2 - Second point longitude
+ * @returns {number} Distance in miles
+ * 
+ * @example
+ * const dist = haversineDistance(35.12, -106.64, 35.14, -106.62);
+ * console.log(dist); // ~1.5 miles
+ */
+function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 3959; // Earth radius in miles
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
 // ============================================================================
 // TEXT PROCESSING UTILITIES
 // ============================================================================

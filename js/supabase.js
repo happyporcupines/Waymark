@@ -112,9 +112,7 @@ function updateAuthUi() {
     }
 
     if (profileDisplayNameEl) {
-        const resolvedName = getDisplayNameForUser(authenticatedUser);
-        console.log('[Waymark] updateAuthUi → user_metadata:', authenticatedUser && authenticatedUser.user_metadata, '→ resolved:', resolvedName);
-        profileDisplayNameEl.innerText = resolvedName;
+           profileDisplayNameEl.innerText = getDisplayNameForUser(authenticatedUser);
     }
 
     const avatarUrl = getAvatarUrlForUser(authenticatedUser);

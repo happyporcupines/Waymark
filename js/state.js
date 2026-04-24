@@ -107,45 +107,8 @@ let appView = null;
 let appGraphicsLayer = null;
 
 /**
- * Reference to the ArcGIS Point constructor
- * Used to rebuild map points when hydrating entries from Supabase
- * @type {Function|null}
- */
-let PointCtor = null;
-
-/**
- * Reference to the ArcGIS Graphic constructor
- * Used to create new map graphics for entry points and story lines
- * Stored globally to avoid repeated module requires
- * @type {Function|null}
- */
-let GraphicCtor = null;
-
-/**
- * Reference to the ArcGIS Polyline constructor
- * Used to draw connecting lines between entries in a story
- * Required for creating story path visualizations
- * @type {Function|null}
- */
-let PolylineCtor = null;
-
-/**
- * Reference to the ArcGIS geometryEngine module
- * Provides geodesic distance calculations for story mileage
- * @type {Object|null}
- */
-let geometryEngineModule = null;
-
-/**
- * Reference to the ArcGIS GraphicsLayer constructor
- * Each story gets its own dedicated graphics layer for organization and visibility control
- * @type {Function|null}
- */
-let GraphicsLayerCtor = null;
-
-/**
- * Reference to the main ArcGIS Map instance
- * Needed when adding new story graphics layers dynamically
+ * Reference to the main map instance (Mapbox GL)
+ * Needed when adding event listeners and managing the map
  * @type {Object|null}
  */
 let mapInstance = null;

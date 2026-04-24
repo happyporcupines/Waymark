@@ -21,7 +21,7 @@
  * - Users must remove from one story before adding to another
  * 
  * Distance Calculations:
- * - Uses ArcGIS geometryEngine for accurate geodesic (curved earth) distances
+ * - Uses haversine formula for accurate geodesic (curved earth) distances
  * - Calculates both total journey distance and segment distances
  * - Each entry stores: distFromPrev and distToNext
  * 
@@ -35,9 +35,9 @@
 // ============================================================================
 
 /**
- * Converts hexadecimal color to RGBA array for ArcGIS symbol styling
+ * Converts hexadecimal color to RGBA array for symbol styling
  * 
- * ArcGIS expects colors as [r, g, b, a] arrays where:
+ * Returns colors as [r, g, b, a] arrays where:
  * - r, g, b are 0-255
  * - a (alpha/opacity) is 0-1
  * 
@@ -412,11 +412,13 @@ function saveStory() {
             entryIds: orderedEntryIds, 
             visible: true, 
             totalMiles: 0, 
-            graphicsLayer: new GraphicsLayerCtor(), 
             lineColor: colorHex
         };
-        mapInstance.add(story.graphicsLayer);
         stories.push(story);
+        // Update map to show the new story line
+        if (typeof updateMapStoryLines === 'function') {
+            updateMapStoryLines();
+        }
     }
     // After saving the story, we need to update the graphics on the map to reflect the new story composition
     updateStoryMapGraphics(story);
@@ -465,89 +467,60 @@ function saveStory() {
  *    - Updates popup templates with story info
  * 
  * GEODESIC CALCULATIONS:
- * Uses ArcGIS geometryEngine for accurate curved-earth distances.
- * Results are in miles (configurable in geodesicLength call).
+ * Uses haversine formula for accurate curved-earth distances.
+ * Results are in miles.
  * 
- * @param {Object} story - Story object with id, entryIds, graphicsLayer, lineColor
+ * @param {Object} story - Story object with id, entryIds, lineColor
  */
 function updateStoryMapGraphics(story) {
-    // STEP 1: Clear existing graphics from this story's layer
-    story.graphicsLayer.removeAll();
-    
     // Initialize data structures
-    const orderedMapPoints = [];     // ArcGIS Point objects in story order
     const storyEntries = [];          // Full entry objects in story order
-    const affectedPointKeys = new Set();  // Points that need graphic updates
+    const storyPoints = [];            // Lat/lon points in story order
     story.totalMiles = 0;
     
-    // STEP 2: GATHER DATA - Convert entry IDs to map points and entries
+    // Gather entries and points in story order
     story.entryIds.forEach(eid => {
         const entry = journalEntries.find(je => je.id === eid);
         if (entry) {
-            const pointKey = buildPointKey(entry.lat, entry.lon);
-            affectedPointKeys.add(pointKey);  // Track for later graphic update
-            const pointRecord = pointStore.get(pointKey);
-            if (pointRecord && pointRecord.mapPoint) {
-                orderedMapPoints.push(pointRecord.mapPoint);
-            }
             storyEntries.push(entry);
+            storyPoints.push({ lat: entry.lat, lon: entry.lon });
         }
     });
 
-    // STEP 3: DRAW LINE & CALCULATE DISTANCES
+    // Calculate total distance and segment distances using haversine
     let totalMiles = 0;
-    const segmentMiles = [];  // Distance info for each entry
+    const segmentMiles = [];
     
-    // Only proceed if we have at least 2 points and required ArcGIS modules
-    if (orderedMapPoints.length >= 2 && PolylineCtor && geometryEngineModule) {
-        const spatialReference = orderedMapPoints[0].spatialReference || { wkid: 4326 };
+    if (storyPoints.length >= 2) {
+        // Calculate distance between consecutive points
+        for (let i = 0; i < storyPoints.length - 1; i++) {
+            const curr = storyPoints[i];
+            const next = storyPoints[i + 1];
+            const dist = haversineDistance(curr.lat, curr.lon, next.lat, next.lon);
+            totalMiles += dist;
+        }
         
-        // Build polyline path from ordered points
-        const path = orderedMapPoints.map((point) => [point.x, point.y]);
-        const polyline = new PolylineCtor({ paths: [path], spatialReference });
-        
-        // Calculate total journey distance using geodesic (curved earth) math
-        totalMiles = geometryEngineModule.geodesicLength(polyline, "miles");
-        story.totalMiles = Number.isFinite(totalMiles) ? totalMiles : 0;
+        story.totalMiles = totalMiles;
 
-        // Create and add the line graphic to the story's layer
-        const lineGraphic = new GraphicCtor({
-            geometry: polyline,
-            symbol: { 
-                type: "simple-line", 
-                color: hexToRgba(story.lineColor || '#a43855'), 
-                width: 4, 
-                style: "solid" 
-            }
-        });
-        story.graphicsLayer.add(lineGraphic);
-
-        // CALCULATE SEGMENT DISTANCES: Distance from prev and to next for each entry
-        for (let i = 0; i < orderedMapPoints.length; i++) {
+        // Calculate segment distances for each entry
+        for (let i = 0; i < storyPoints.length; i++) {
             let distFromPrev = 0, distToNext = 0;
             
-            // Distance from previous entry (skip first entry)
             if (i > 0) {
-                const prevToCurrent = new PolylineCtor({
-                    paths: [[[orderedMapPoints[i - 1].x, orderedMapPoints[i - 1].y], [orderedMapPoints[i].x, orderedMapPoints[i].y]]],
-                    spatialReference
-                });
-                distFromPrev = geometryEngineModule.geodesicLength(prevToCurrent, "miles");
+                const prev = storyPoints[i - 1];
+                const curr = storyPoints[i];
+                distFromPrev = haversineDistance(prev.lat, prev.lon, curr.lat, curr.lon);
             }
             
-            // Distance to next entry (skip last entry)
-            if (i < orderedMapPoints.length - 1) {
-                const currentToNext = new PolylineCtor({
-                    paths: [[[orderedMapPoints[i].x, orderedMapPoints[i].y], [orderedMapPoints[i + 1].x, orderedMapPoints[i + 1].y]]],
-                    spatialReference
-                });
-                distToNext = geometryEngineModule.geodesicLength(currentToNext, "miles");
+            if (i < storyPoints.length - 1) {
+                const curr = storyPoints[i];
+                const next = storyPoints[i + 1];
+                distToNext = haversineDistance(curr.lat, curr.lon, next.lat, next.lon);
             }
             
-            // Store distance info (validate finite numbers)
             segmentMiles.push({
-                distFromPrev: Number.isFinite(distFromPrev) ? distFromPrev : 0,
-                distToNext: Number.isFinite(distToNext) ? distToNext : 0
+                distFromPrev: distFromPrev,
+                distToNext: distToNext
             });
         }
     }
@@ -557,20 +530,18 @@ function updateStoryMapGraphics(story) {
         segmentMiles.push({ distFromPrev: 0, distToNext: 0 });
     }
 
-    // STEP 4: CLEANUP - Remove stale distance data from entries not in any story
+    // Cleanup: Remove stale distance data from entries not in any story
     const allStoryEntryIds = new Set();
     stories.forEach((storyItem) => {
         storyItem.entryIds.forEach((entryId) => allStoryEntryIds.add(entryId));
     });
 
-    // Clean from journalEntries array
     journalEntries.forEach((entry) => {
         if (!allStoryEntryIds.has(entry.id)) {
             delete entry.storyDistanceInfo;
         }
     });
     
-    // Clean from pointStore entries
     pointStore.forEach((pointRecord) => {
         pointRecord.entries.forEach((entry) => {
             if (!allStoryEntryIds.has(entry.id)) {
@@ -579,12 +550,11 @@ function updateStoryMapGraphics(story) {
         });
     });
 
-    // STEP 5: ATTACH DISTANCE INFO - Add mileage data to both storage locations
+    // Attach distance info to entries in both storage locations
     storyEntries.forEach((entry, idx) => {
         const mileageInfo = segmentMiles[idx] || { distFromPrev: 0, distToNext: 0 };
-        entry.storyDistanceInfo = mileageInfo;  // Add to journalEntries entry
+        entry.storyDistanceInfo = mileageInfo;
 
-        // Also add to pointStore entry (for popup display)
         pointStore.forEach((pointRecord) => {
             const pointEntry = pointRecord.entries.find((item) => item.id === entry.id);
             if (pointEntry) {
@@ -593,14 +563,10 @@ function updateStoryMapGraphics(story) {
         });
     });
     
-    // STEP 6: UPDATE POINT GRAPHICS - Refresh markers for affected points
-    // This changes marker color to black and updates popup templates
-    affectedPointKeys.forEach((pointKey) => {
-        const pointRecord = pointStore.get(pointKey);
-        if (pointRecord && pointRecord.graphic) {
-            updatePointGraphic(pointRecord);
-        }
-    });
+    // Update map with new story line
+    if (typeof updateMapStoryLines === 'function') {
+        updateMapStoryLines();
+    }
 }
 
 // ============================================================================
@@ -638,7 +604,10 @@ function toggleStoryVisibility(storyId) {
     const story = stories.find(s => s.id === storyId);
     if (story) {
         story.visible = !story.visible;
-        story.graphicsLayer.visible = story.visible;
+        // Update map to refresh story line visibility
+        if (typeof updateMapStoryLines === 'function') {
+            updateMapStoryLines();
+        }
         if (typeof queueSupabaseSync === 'function') {
             queueSupabaseSync();
         }
