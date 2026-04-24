@@ -79,6 +79,12 @@ document.addEventListener('click', (event) => {
         }
         return;
     }
+    if (target.closest('#profileSummaryBtn')) {
+        if (typeof openProfileModal === 'function') {
+            openProfileModal();
+        }
+        return;
+    }
     // Navigation buttons
     if (target.closest('#navMap')) {
         document.getElementById('sidebar').classList.remove('active');
@@ -94,9 +100,12 @@ document.addEventListener('click', (event) => {
         return;
     }
     if (target.closest('#navProfile')) {
-        // Profile view - for now, just show the sidebar
-        document.getElementById('sidebar').classList.add('active');
-        document.querySelector('.map-container').style.display = 'none';
+        if (typeof openProfileModal === 'function') {
+            openProfileModal();
+            if (!authenticatedUser) {
+                alert('Sign in to edit your profile.');
+            }
+        }
         updateMobileNavState('navProfile');
         return;
     }
@@ -112,6 +121,18 @@ document.addEventListener('click', (event) => {
     }
     if (target.closest('#closeDetailBtn')) {
         closeDetailPanel();
+        return;
+    }
+    if (target.closest('#cancelProfileBtn')) {
+        if (typeof closeProfileModal === 'function') {
+            closeProfileModal();
+        }
+        return;
+    }
+    if (target.closest('#saveProfileBtn')) {
+        if (typeof saveProfileChanges === 'function') {
+            saveProfileChanges();
+        }
         return;
     }
     // Editor formatting buttons

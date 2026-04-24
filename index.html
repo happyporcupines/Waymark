@@ -33,7 +33,14 @@
 <div id="mainApp" class="app-container" style="display: none;">
 <!-- Webpage Header -->
     <header class="app-header">
-        <h2>Waymark</h2>
+        <div class="brand-profile-wrap">
+            <h2>Waymark</h2>
+            <button id="profileSummaryBtn" type="button" class="profile-summary-btn" style="display: none;" aria-label="Open profile editor">
+                <img id="profileAvatar" class="profile-avatar" src="" alt="Profile" style="display: none;" />
+                <span id="profileAvatarFallback" class="profile-avatar-fallback" aria-hidden="true">👤</span>
+                <span id="profileDisplayName">Profile</span>
+            </button>
+        </div>
         <div style="display: flex; align-items: center; gap: 15px;">
             <button id="storiesBtn" type="button" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">My Stories 🗺️</button>
             <div id="userInfo">Not Logged In</div>
@@ -72,6 +79,34 @@
         <button id="navProfile" type="button">Profile</button>
     </nav>
 
+</div>
+<!-- Profile editor modal -->
+<div id="profileModal" class="overlay" style="display: none; z-index: 120;">
+    <div class="entry-modal-box profile-modal-box" style="max-width: 680px;">
+        <div class="profile-modal-header">
+            <h3>User Profile</h3>
+            <span class="profile-avatar-fallback large" aria-hidden="true">👤</span>
+        </div>
+
+        <label for="profileDisplayNameInput">Display Name</label>
+        <input type="text" id="profileDisplayNameInput" placeholder="Your display name" />
+
+        <label for="profileEmailInput">Email Address</label>
+        <input type="email" id="profileEmailInput" placeholder="name@example.com" />
+
+        <label for="profileCurrentPasswordInput">Current Password (required to change email/password)</label>
+        <input type="password" id="profileCurrentPasswordInput" placeholder="Current password" />
+
+        <label for="profileNewPasswordInput">New Password (optional)</label>
+        <input type="password" id="profileNewPasswordInput" placeholder="New password" />
+
+        <p id="profileStatus" class="profile-status"></p>
+
+        <div class="entry-modal-actions">
+            <button id="cancelProfileBtn" type="button" class="cancel-btn">Cancel</button>
+            <button id="saveProfileBtn" type="button" class="save-btn">Save Changes</button>
+        </div>
+    </div>
 </div>
 <!-- Modal for creating/editing entries -->
 <div id="entryModal" class="overlay" style="display: none;">

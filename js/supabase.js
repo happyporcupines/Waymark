@@ -17,6 +17,46 @@ let loadedUserId = null;
 
 const REMOTE_SYNC_DEBOUNCE_MS = 1200;
 
+function getAuthRedirectUrl() {
+    const cfg = window.WAYMARK_CONFIG || {};
+    if (cfg.AUTH_REDIRECT_URL) {
+        return cfg.AUTH_REDIRECT_URL;
+    }
+    return window.location.origin + window.location.pathname;
+}
+
+function getDisplayNameForUser(user) {
+    if (!user) {
+        return 'Profile';
+    }
+    const metadata = user.user_metadata || {};
+    const displayName = (metadata.display_name || '').trim();
+    if (displayName) {
+        return displayName;
+    }
+    if (user.email) {
+        return user.email.split('@')[0];
+    }
+    return 'Profile';
+}
+
+function getAvatarUrlForUser(user) {
+    if (!user || !user.user_metadata) {
+        return '';
+    }
+    const avatarUrl = (user.user_metadata.avatar_url || '').trim();
+    return avatarUrl;
+}
+
+function setProfileStatus(message, isError = false) {
+    const statusEl = document.getElementById('profileStatus');
+    if (!statusEl) {
+        return;
+    }
+    statusEl.textContent = message || '';
+    statusEl.style.color = isError ? '#8b1f3d' : '#2f5f3a';
+}
+
 function setAuthStatus(message, isError = false) {
     const authStatusEl = document.getElementById('authStatus');
     if (!authStatusEl) {
@@ -55,13 +95,182 @@ function getSupabaseClient() {
 
 function updateAuthUi() {
     const logoutBtn = document.getElementById('logoutBtn');
+    const profileSummaryBtn = document.getElementById('profileSummaryBtn');
+    const profileDisplayNameEl = document.getElementById('profileDisplayName');
+    const profileAvatarEl = document.getElementById('profileAvatar');
+    const profileAvatarFallbackEl = document.getElementById('profileAvatarFallback');
+
     if (logoutBtn) {
         logoutBtn.style.display = authenticatedUser ? 'inline-block' : 'none';
+    }
+    if (profileSummaryBtn) {
+        profileSummaryBtn.style.display = authenticatedUser ? 'inline-flex' : 'none';
     }
 
     const userInfoEl = document.getElementById('userInfo');
     if (userInfoEl && authenticatedUser && authenticatedUser.email) {
-        userInfoEl.innerText = `User: ${authenticatedUser.email}`;
+        userInfoEl.innerText = authenticatedUser.email;
+    } else if (userInfoEl) {
+        userInfoEl.innerText = isGuestMode ? 'Guest mode' : 'Not Logged In';
+    }
+
+    if (profileDisplayNameEl) {
+        profileDisplayNameEl.innerText = getDisplayNameForUser(authenticatedUser);
+    }
+
+    const avatarUrl = getAvatarUrlForUser(authenticatedUser);
+    if (profileAvatarEl && profileAvatarFallbackEl) {
+        if (avatarUrl) {
+            profileAvatarEl.src = avatarUrl;
+            profileAvatarEl.style.display = 'inline-flex';
+            profileAvatarFallbackEl.style.display = 'none';
+        } else {
+            profileAvatarEl.removeAttribute('src');
+            profileAvatarEl.style.display = 'none';
+            profileAvatarFallbackEl.style.display = 'inline-flex';
+        }
+    }
+}
+
+function openProfileModal() {
+    if (!authenticatedUser) {
+        return;
+    }
+    const displayNameInput = document.getElementById('profileDisplayNameInput');
+    const emailInput = document.getElementById('profileEmailInput');
+    const currentPasswordInput = document.getElementById('profileCurrentPasswordInput');
+    const newPasswordInput = document.getElementById('profileNewPasswordInput');
+    const profileModal = document.getElementById('profileModal');
+
+    if (!displayNameInput || !emailInput || !profileModal) {
+        return;
+    }
+
+    displayNameInput.value = (authenticatedUser.user_metadata?.display_name || '').trim();
+    emailInput.value = authenticatedUser.email || '';
+    if (currentPasswordInput) {
+        currentPasswordInput.value = '';
+    }
+    if (newPasswordInput) {
+        newPasswordInput.value = '';
+    }
+    setProfileStatus('');
+    profileModal.style.display = 'flex';
+}
+
+function closeProfileModal() {
+    const profileModal = document.getElementById('profileModal');
+    if (!profileModal) {
+        return;
+    }
+    profileModal.style.display = 'none';
+}
+
+async function saveProfileChanges() {
+    if (!authenticatedUser) {
+        setProfileStatus('You need to be signed in to edit profile.', true);
+        return;
+    }
+
+    const client = getSupabaseClient();
+    if (!client) {
+        setProfileStatus('Supabase client is not available.', true);
+        return;
+    }
+
+    const displayNameInput = document.getElementById('profileDisplayNameInput');
+    const emailInput = document.getElementById('profileEmailInput');
+    const currentPasswordInput = document.getElementById('profileCurrentPasswordInput');
+    const newPasswordInput = document.getElementById('profileNewPasswordInput');
+
+    const newDisplayName = displayNameInput ? displayNameInput.value.trim() : '';
+    const newEmail = emailInput ? emailInput.value.trim() : '';
+    const currentPassword = currentPasswordInput ? currentPasswordInput.value : '';
+    const newPassword = newPasswordInput ? newPasswordInput.value : '';
+
+    const currentEmail = (authenticatedUser.email || '').trim();
+    const isEmailChange = !!newEmail && newEmail.toLowerCase() !== currentEmail.toLowerCase();
+    const isPasswordChange = !!newPassword;
+    const isDisplayNameChange = newDisplayName !== ((authenticatedUser.user_metadata?.display_name || '').trim());
+
+    if (!isEmailChange && !isPasswordChange && !isDisplayNameChange) {
+        setProfileStatus('No profile changes to save.');
+        return;
+    }
+
+    if ((isEmailChange || isPasswordChange) && !currentPassword) {
+        setProfileStatus('Enter your current password to change email or password.', true);
+        return;
+    }
+
+    if (isPasswordChange && newPassword.length < 6) {
+        setProfileStatus('New password must be at least 6 characters.', true);
+        return;
+    }
+
+    setProfileStatus('Saving profile...');
+
+    if (isEmailChange || isPasswordChange) {
+        const { error: reauthError } = await client.auth.signInWithPassword({
+            email: currentEmail,
+            password: currentPassword
+        });
+        if (reauthError) {
+            setProfileStatus('Current password is incorrect.', true);
+            return;
+        }
+    }
+
+    if (isDisplayNameChange) {
+        const mergedMetadata = Object.assign({}, authenticatedUser.user_metadata || {}, {
+            display_name: newDisplayName
+        });
+        const { data, error } = await client.auth.updateUser({
+            data: mergedMetadata
+        });
+        if (error) {
+            setProfileStatus(error.message || 'Could not update display name.', true);
+            return;
+        }
+        if (data && data.user) {
+            authenticatedUser = data.user;
+        }
+    }
+
+    if (isEmailChange) {
+        const { data, error } = await client.auth.updateUser({
+            email: newEmail
+        }, {
+            emailRedirectTo: getAuthRedirectUrl()
+        });
+        if (error) {
+            setProfileStatus(error.message || 'Could not update email address.', true);
+            return;
+        }
+        if (data && data.user) {
+            authenticatedUser = data.user;
+        }
+    }
+
+    if (isPasswordChange) {
+        const { data, error } = await client.auth.updateUser({
+            password: newPassword
+        });
+        if (error) {
+            setProfileStatus(error.message || 'Could not update password.', true);
+            return;
+        }
+        if (data && data.user) {
+            authenticatedUser = data.user;
+        }
+    }
+
+    updateAuthUi();
+    if (isEmailChange) {
+        setProfileStatus('Saved. Confirm your new email using the link sent to your inbox.');
+    } else {
+        setProfileStatus('Profile updated.');
+        closeProfileModal();
     }
 }
 
@@ -400,7 +609,13 @@ async function handleLoginAction(email, password) {
     const loginResult = await client.auth.signInWithPassword({ email, password });
 
     if (loginResult.error) {
-        const signupResult = await client.auth.signUp({ email, password });
+        const signupResult = await client.auth.signUp({
+            email,
+            password,
+            options: {
+                emailRedirectTo: getAuthRedirectUrl()
+            }
+        });
         if (signupResult.error) {
             setAuthStatus(signupResult.error.message || 'Authentication failed.', true);
             return;
@@ -428,6 +643,7 @@ async function handleLogoutAction() {
 
     authenticatedUser = null;
     loadedUserId = null;
+    closeProfileModal();
     clearLocalDataState();
     updateAuthUi();
     showLoginScreen();
