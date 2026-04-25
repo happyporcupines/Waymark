@@ -460,19 +460,32 @@ async function loadSupabaseDataForCurrentUser() {
     }
 
     console.log('[Waymark] loadSupabaseDataForCurrentUser: starting load for', authenticatedUser.id);
+    console.log('[Waymark] waiting for map runtime...');
     const mapReady = await waitForMapRuntime();
+    console.log('[Waymark] waitForMapRuntime resolved:', mapReady, '| authenticatedUser still set:', !!authenticatedUser);
     if (!mapReady) {
         setAuthStatus('Map took too long to initialize. Refresh and try again.', true);
         return false;
     }
 
     isHydratingRemoteData = true;
+    console.log('[Waymark] about to fetch entries from Supabase...');
 
-    const { data: entryRows, error: entryError } = await client
-        .from('entries')
-        .select('*')
-        .eq('user_id', authenticatedUser.id)
-        .order('created_at_ms', { ascending: true });
+    let entryRows, entryError;
+    try {
+        const entryResult = await client
+            .from('entries')
+            .select('*')
+            .eq('user_id', authenticatedUser.id)
+            .order('created_at_ms', { ascending: true });
+        entryRows = entryResult.data;
+        entryError = entryResult.error;
+    } catch (fetchErr) {
+        console.error('[Waymark] Entry fetch threw exception:', fetchErr);
+        isHydratingRemoteData = false;
+        return false;
+    }
+    console.log('[Waymark] entries fetch returned — error:', entryError, '| rows:', (entryRows || []).length);
 
     if (entryError) {
         console.error('[Waymark] Entry fetch error:', entryError);
