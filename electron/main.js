@@ -1,6 +1,32 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
+function configureMaptilerRequestHeaders() {
+    const referer = process.env.WAYMARK_MAPTILER_REFERRER || 'https://happyporcupines.github.io/Waymark/';
+    let origin = 'https://happyporcupines.github.io';
+    try {
+        origin = new URL(referer).origin;
+    } catch (error) {
+        console.warn('[Waymark Electron] Invalid WAYMARK_MAPTILER_REFERRER, using default origin.');
+    }
+
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+        { urls: ['https://api.maptiler.com/*', 'https://*.maptiler.com/*'] },
+        (details, callback) => {
+            const headers = details.requestHeaders || {};
+            if (!headers.Referer && !headers.referer) {
+                headers.Referer = referer;
+            }
+            if (!headers.Origin && !headers.origin) {
+                headers.Origin = origin;
+            }
+            callback({ requestHeaders: headers });
+        }
+    );
+
+    console.log('[Waymark Electron] MapTiler request headers configured with referer:', referer);
+}
 
 // ============================================================================
 // WINDOW MANAGEMENT
@@ -43,6 +69,7 @@ function createWindow() {
 // ============================================================================
 
 app.whenReady().then(() => {
+    configureMaptilerRequestHeaders();
     createWindow();
 
     app.on('activate', () => {

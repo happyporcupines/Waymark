@@ -69,13 +69,14 @@ function initMap() {
     const cfg = window.WAYMARK_CONFIG || {};
     const maptilerKey = cfg.MAPTILER_KEY || '';
     const electronRuntime = isElectronRuntime();
-    const electronMapStyle = String(cfg.ELECTRON_MAP_STYLE || 'maptiler-first').toLowerCase();
+    const electronMapStyle = String(cfg.ELECTRON_MAP_STYLE || 'maptiler-only').toLowerCase();
 
     let chosenStyle;
     let usingMaptiler = false;
 
     // Electron mode can be configured:
-    // - 'maptiler-first' (default): try MapTiler, fallback to OSM if denied
+    // - 'maptiler-only' (default): use MapTiler and do not fallback to OSM
+    // - 'maptiler-first': use MapTiler, fallback to OSM if denied
     // - 'osm': always use OSM raster
     if (electronRuntime) {
         if (electronMapStyle === 'osm' || !maptilerKey) {
@@ -84,7 +85,7 @@ function initMap() {
         } else {
             usingMaptiler = true;
             chosenStyle = `https://api.maptiler.com/maps/dataviz/style.json?key=${maptilerKey}`;
-            console.log('[Waymark] Electron runtime using MapTiler-first style.');
+            console.log('[Waymark] Electron runtime using MapTiler style mode:', electronMapStyle);
         }
     } else if (maptilerKey) {
         usingMaptiler = true;
@@ -236,7 +237,8 @@ function initMap() {
             const msg = String(e?.error?.message || '');
             const status = Number(e?.error?.status || 0);
             const maptiler403 = status === 403 || (msg.includes('403') && msg.includes('api.maptiler.com'));
-            if (usingMaptiler && !fallbackApplied && maptiler403) {
+            const allowOsmFallback = !electronRuntime || electronMapStyle === 'maptiler-first';
+            if (usingMaptiler && allowOsmFallback && !fallbackApplied && maptiler403) {
                 fallbackApplied = true;
                 console.warn('[Waymark] MapTiler style denied (403). Falling back to OSM base map style.');
                 map.setStyle(getOsmRasterStyle());
