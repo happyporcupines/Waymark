@@ -460,13 +460,6 @@ async function loadSupabaseDataForCurrentUser() {
     }
 
     console.log('[Waymark] loadSupabaseDataForCurrentUser: starting load for', authenticatedUser.id);
-    console.log('[Waymark] waiting for map runtime...');
-    const mapReady = await waitForMapRuntime();
-    console.log('[Waymark] waitForMapRuntime resolved:', mapReady, '| authenticatedUser still set:', !!authenticatedUser);
-    if (!mapReady) {
-        setAuthStatus('Map took too long to initialize. Refresh and try again.', true);
-        return false;
-    }
 
     isHydratingRemoteData = true;
     console.log('[Waymark] about to fetch entries from Supabase...');

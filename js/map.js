@@ -164,7 +164,11 @@ function initMap() {
             
             // Long-press handler for creating new entries
             setupLongPressHandler(map);
-            
+
+            // If data was loaded before map was ready, render it now
+            if (typeof updateMapEntryMarkers === 'function') updateMapEntryMarkers();
+            if (typeof updateMapStoryLines === 'function') updateMapStoryLines();
+
             // Attempt to center on user's location
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition((position) => {
