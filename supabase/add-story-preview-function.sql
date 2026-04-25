@@ -74,3 +74,10 @@ BEGIN
   ORDER BY e.created_at_ms ASC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute to both roles so PostgREST exposes the function
+GRANT EXECUTE ON FUNCTION public.get_story_preview_entries(INTEGER, UUID) TO anon;
+GRANT EXECUTE ON FUNCTION public.get_story_preview_entries(INTEGER, UUID) TO authenticated;
+
+-- Reload PostgREST schema cache so the function becomes immediately available
+NOTIFY pgrst, 'reload schema';
