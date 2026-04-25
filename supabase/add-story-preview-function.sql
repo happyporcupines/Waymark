@@ -71,6 +71,6 @@ BEGIN
       WHERE sid.value ~ '^[0-9]+$'
         AND sid.value::integer = e.entry_id
     )
-  ORDER BY e.created_at ASC;
+  ORDER BY e.created_at_ms ASC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
