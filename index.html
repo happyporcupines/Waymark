@@ -46,6 +46,8 @@
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <button id="storiesBtn" type="button" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">My Stories 🗺️</button>
             <button id="galleryBtn" type="button" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Gallery 🌍</button>
+            <button id="offlineMapsBtn" type="button" style="display: none; background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Offline Maps ⬇️</button>
+            <button id="exportPdfBtn" type="button" style="display: none; background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Export PDF 📄</button>
             <div id="userInfo">Not Logged In</div>
             <button id="logoutBtn" type="button" style="display: none; background: rgba(0,0,0,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Log Out</button>
         </div>
@@ -64,6 +66,7 @@
         <div class="map-container">
             <div id="viewDiv"></div>
             <div class="map-hint">Tap entries to select them, or long-press (800ms) on the map to add a new entry</div>
+            <div id="runtimeFeatureHint" class="map-hint" style="display: none; margin-top: 8px;"></div>
         </div>
                 <!-- Gallery story preview banner -->
                 <div id="previewBanner" style="display:none;" class="preview-banner">

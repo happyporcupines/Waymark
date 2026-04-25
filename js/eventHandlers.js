@@ -238,6 +238,19 @@ document.addEventListener('click', (event) => {
         if (typeof openGalleryModal === 'function') openGalleryModal('public');
         return;
     }
+    if (target.closest('#offlineMapsBtn')) {
+        const caps = window.WAYMARK_RUNTIME_CAPS || runtimeCapabilities;
+        if (!caps || !caps.supportsOfflineExtentSave) {
+            alert('Offline map extent saving is only available in the desktop app or Play Store installed app.');
+            return;
+        }
+        alert('Offline map extent manager is coming next. Runtime checks are now enabled.');
+        return;
+    }
+    if (target.closest('#exportPdfBtn')) {
+        alert('PDF export is coming next. Runtime checks and button wiring are now enabled.');
+        return;
+    }
     if (target.closest('#closeGalleryBtn')) { document.getElementById('galleryModal').style.display = 'none'; return; }
     if (target.closest('#myStoriesFromGalleryBtn')) {
         document.getElementById('galleryModal').style.display = 'none';

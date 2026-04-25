@@ -308,6 +308,36 @@ function closeDetailPanel() {
     document.getElementById('entryDetailPanel').classList.remove('active');
 }
 
+/**
+ * Updates feature controls based on detected runtime capabilities.
+ * Offline extent controls are only shown for Electron and Play-store installs.
+ *
+ * @param {Object} caps - Runtime capability flags
+ */
+function updateRuntimeCapabilityUI(caps) {
+    const offlineBtn = document.getElementById('offlineMapsBtn');
+    const exportBtn = document.getElementById('exportPdfBtn');
+    const hintEl = document.getElementById('runtimeFeatureHint');
+
+    if (offlineBtn) {
+        offlineBtn.style.display = caps && caps.supportsOfflineExtentSave ? 'inline-block' : 'none';
+    }
+
+    if (exportBtn) {
+        exportBtn.style.display = caps && caps.supportsPdfExport ? 'inline-block' : 'none';
+    }
+
+    if (hintEl) {
+        if (caps && caps.supportsOfflineExtentSave) {
+            hintEl.style.display = 'block';
+            hintEl.textContent = 'Offline maps are available on this installed app.';
+        } else {
+            hintEl.style.display = 'none';
+            hintEl.textContent = '';
+        }
+    }
+}
+
 // ============================================================================
 // APP INITIALIZATION & LOGIN
 // ============================================================================

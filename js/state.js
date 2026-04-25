@@ -169,3 +169,32 @@ let authenticatedUser = null;
  * @type {boolean}
  */
 let isHydratingRemoteData = false;
+
+// ============================================================================
+// RUNTIME CAPABILITIES (PWA / TWA / ELECTRON)
+// ============================================================================
+
+/**
+ * Runtime capability flags used to gate platform-specific features.
+ * Values are initialized in pwa.js after runtime detection completes.
+ * @type {{
+ *   platform: string,
+ *   isInstalled: boolean,
+ *   isElectron: boolean,
+ *   isTwaLike: boolean,
+ *   supportsOfflineExtentSave: boolean,
+ *   supportsOfflineTileDownload: boolean,
+ *   supportsNativePdfExport: boolean,
+ *   supportsPdfExport: boolean
+ * }}
+ */
+let runtimeCapabilities = {
+	platform: 'web',
+	isInstalled: false,
+	isElectron: false,
+	isTwaLike: false,
+	supportsOfflineExtentSave: false,
+	supportsOfflineTileDownload: false,
+	supportsNativePdfExport: false,
+	supportsPdfExport: true
+};
