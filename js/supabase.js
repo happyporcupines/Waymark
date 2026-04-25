@@ -17,6 +17,7 @@ let loadedUserId = null;
 let pendingProfileAvatarUrl = '';
 let isLoggingOut = false;
 let authBootstrapComplete = false;
+let initialUserDataHydrated = false;
 
 const REMOTE_SYNC_DEBOUNCE_MS = 1200;
 
@@ -636,6 +637,12 @@ async function pushLocalDataToSupabase() {
         return;
     }
 
+    // Safety guard: never run destructive sync until we've loaded the user's
+    // canonical server state for this session.
+    if (!initialUserDataHydrated) {
+        return;
+    }
+
     syncInFlight = true;
     syncQueuedDuringFlight = false;
 
@@ -695,6 +702,9 @@ function queueSupabaseSync() {
     if (!authenticatedUser || isGuestMode || isHydratingRemoteData) {
         return;
     }
+    if (!initialUserDataHydrated) {
+        return;
+    }
     if (syncTimer) {
         clearTimeout(syncTimer);
     }
@@ -718,8 +728,12 @@ async function enterAuthenticatedApp(user) {
         (journalEntries.length === 0 && pointStore.size === 0 && stories.length === 0);
 
     if (shouldLoadRemoteData) {
+        initialUserDataHydrated = false;
         const didLoadRemoteData = await loadSupabaseDataForCurrentUser();
         loadedUserId = didLoadRemoteData ? user.id : null;
+        initialUserDataHydrated = !!didLoadRemoteData;
+    } else if (loadedUserId === user.id) {
+        initialUserDataHydrated = true;
     }
 }
 
@@ -819,20 +833,21 @@ async function handleLogoutAction() {
         }
     } catch (error) {
         console.error('[Waymark] Logout error:', error);
+    } finally {
+        authenticatedUser = null;
+        loadedUserId = null;
+        initialUserDataHydrated = false;
+        closeProfileModal();
+        clearLocalDataState();
+        updateAuthUi();
+        showLoginScreen();
+        setAuthStatus('Signed out.');
+
+        // Give auth listeners a moment to settle before allowing new auth events.
+        setTimeout(() => {
+            isLoggingOut = false;
+        }, 1500);
     }
-
-    authenticatedUser = null;
-    loadedUserId = null;
-    closeProfileModal();
-    clearLocalDataState();
-    updateAuthUi();
-    showLoginScreen();
-    setAuthStatus('Signed out.');
-
-    // Give auth listeners a moment to settle before allowing new auth events.
-    setTimeout(() => {
-        isLoggingOut = false;
-    }, 1500);
 }
 
 function initializeSupabaseAuth() {
@@ -893,6 +908,7 @@ function initializeSupabaseAuth() {
             // User is not logged in
             authenticatedUser = null;
             loadedUserId = null;
+            initialUserDataHydrated = false;
             updateAuthUi();
             showLoginScreen();
             return;
@@ -923,6 +939,7 @@ function initializeSupabaseAuth() {
         if (!data || !data.session || !data.session.user) {
             authenticatedUser = null;
             loadedUserId = null;
+            initialUserDataHydrated = false;
             updateAuthUi();
             showLoginScreen();
         }
