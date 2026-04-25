@@ -2,12 +2,14 @@
   "name": "waymark",
   "version": "1.0.0",
   "description": "A personal travel journal with map-based entry logging",
+  "author": "happyporcupines <happyporcupines@users.noreply.github.com>",
   "main": "electron/main.js",
   "scripts": {
     "electron": "electron .",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux",
+    "build:linux": "electron-builder --linux AppImage",
+    "build:linux:deb": "electron-builder --linux deb",
     "build:all": "electron-builder --win --mac --linux"
   },
   "devDependencies": {
@@ -40,7 +42,7 @@
     "linux": {
       "icon": "icons/icon-512.svg",
       "category": "Education",
-      "target": ["AppImage", "deb"]
+      "target": ["AppImage"]
     },
     "nsis": {
       "oneClick": false,

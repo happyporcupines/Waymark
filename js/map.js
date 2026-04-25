@@ -25,6 +25,32 @@
 // MAP INITIALIZATION
 // ============================================================================
 
+function isElectronRuntime() {
+    const ua = navigator.userAgent || '';
+    return !!(window.electronAPI || ua.includes('Electron'));
+}
+
+function getOsmRasterStyle() {
+    return {
+        version: 8,
+        sources: {
+            osm: {
+                type: 'raster',
+                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                tileSize: 256,
+                attribution: '© OpenStreetMap contributors'
+            }
+        },
+        layers: [
+            {
+                id: 'osm-base',
+                type: 'raster',
+                source: 'osm'
+            }
+        ]
+    };
+}
+
 /**
  * Initializes the Maptiler map and sets up all event handlers
  * 
@@ -42,24 +68,44 @@ function initMap() {
     
     const cfg = window.WAYMARK_CONFIG || {};
     const maptilerKey = cfg.MAPTILER_KEY || '';
-    
-    if (!maptilerKey) {
-        console.error('[Waymark] Maptiler key not configured. Check config.js');
-        return;
+    const electronRuntime = isElectronRuntime();
+    const electronMapStyle = String(cfg.ELECTRON_MAP_STYLE || 'maptiler-first').toLowerCase();
+
+    let chosenStyle;
+    let usingMaptiler = false;
+
+    // Electron mode can be configured:
+    // - 'maptiler-first' (default): try MapTiler, fallback to OSM if denied
+    // - 'osm': always use OSM raster
+    if (electronRuntime) {
+        if (electronMapStyle === 'osm' || !maptilerKey) {
+            chosenStyle = getOsmRasterStyle();
+            console.log('[Waymark] Electron runtime using OSM base map style.');
+        } else {
+            usingMaptiler = true;
+            chosenStyle = `https://api.maptiler.com/maps/dataviz/style.json?key=${maptilerKey}`;
+            console.log('[Waymark] Electron runtime using MapTiler-first style.');
+        }
+    } else if (maptilerKey) {
+        usingMaptiler = true;
+        chosenStyle = `https://api.maptiler.com/maps/dataviz/style.json?key=${maptilerKey}`;
+        console.log('[Waymark] Browser runtime using MapTiler style.');
+    } else {
+        chosenStyle = getOsmRasterStyle();
+        console.warn('[Waymark] MapTiler key missing; falling back to OSM base map style.');
     }
-    
-    console.log('[Waymark] Creating map with Maptiler key:', maptilerKey.substring(0, 10) + '...');
     
     try {
         // CREATE MAP INSTANCE with Maptiler dataviz style
         const map = new maplibregl.Map({
             container: 'viewDiv',
-            style: `https://api.maptiler.com/maps/dataviz/style.json?key=${maptilerKey}`,
+            style: chosenStyle,
             center: [-106.644568, 35.126358],  // Default: New Mexico
             zoom: 9,
             pitch: 0,
             bearing: 0
         });
+        let fallbackApplied = false;
 
         // Store map globally for use in other modules
         mapInstance = map;
@@ -185,6 +231,16 @@ function initMap() {
         // Error handler for map
         map.on('error', (e) => {
             console.error('[Waymark] Map error:', e.error);
+
+            // Browser fallback if MapTiler key restrictions or quota produce 403.
+            const msg = String(e?.error?.message || '');
+            const status = Number(e?.error?.status || 0);
+            const maptiler403 = status === 403 || (msg.includes('403') && msg.includes('api.maptiler.com'));
+            if (usingMaptiler && !fallbackApplied && maptiler403) {
+                fallbackApplied = true;
+                console.warn('[Waymark] MapTiler style denied (403). Falling back to OSM base map style.');
+                map.setStyle(getOsmRasterStyle());
+            }
         });
         
         // ================================================================
