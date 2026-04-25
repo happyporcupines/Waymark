@@ -16,6 +16,7 @@ let syncQueuedDuringFlight = false;
 let loadedUserId = null;
 let pendingProfileAvatarUrl = '';
 let isLoggingOut = false;
+let authBootstrapComplete = false;
 
 const REMOTE_SYNC_DEBOUNCE_MS = 1200;
 
@@ -807,11 +808,14 @@ async function handleSignupAction(email, password) {
 }
 
 async function handleLogoutAction() {
+    if (isLoggingOut) {
+        return;
+    }
     isLoggingOut = true;
     try {
         const client = getSupabaseClient();
         if (client) {
-            await client.auth.signOut({ scope: 'local' });
+            await client.auth.signOut();
         }
     } catch (error) {
         console.error('[Waymark] Logout error:', error);
@@ -861,6 +865,13 @@ function initializeSupabaseAuth() {
         }
         
         if (!session || !session.user) {
+            // INITIAL_SESSION can emit logged-out before async storage/session restore settles.
+            // Do not treat this event as authoritative logout.
+            if (event === 'INITIAL_SESSION' && !authBootstrapComplete) {
+                console.log('[Waymark] Ignoring INITIAL_SESSION logged-out during bootstrap');
+                return;
+            }
+
             // Some refresh flows briefly emit signed-out before restoring a valid session.
             // Double-check persisted session before wiping local state.
             try {
@@ -873,6 +884,12 @@ function initializeSupabaseAuth() {
                 console.warn('[Waymark] Session recheck failed:', err);
             }
 
+            // Ignore non-SIGNED_OUT transient events once bootstrap is done.
+            if (event !== 'SIGNED_OUT') {
+                console.log('[Waymark] Ignoring transient logged-out auth event:', event);
+                return;
+            }
+
             // User is not logged in
             authenticatedUser = null;
             loadedUserId = null;
@@ -883,6 +900,7 @@ function initializeSupabaseAuth() {
 
         // User has an active session - enter the app
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+            authBootstrapComplete = true;
             console.log('[Waymark] Restoring session for user:', session.user.email);
             await enterAuthenticatedApp(session.user);
         }
@@ -893,11 +911,20 @@ function initializeSupabaseAuth() {
     client.auth.getSession().catch(err => {
         console.error('[Waymark] Error checking stored session:', err);
     }).then(async (result = {}) => {
+        authBootstrapComplete = true;
         const { data } = result;
         // Only restore if we're not already logged in (avoid double-loading)
         if (data && data.session && data.session.user && !authenticatedUser) {
             console.log('[Waymark] Restoring session from storage for:', data.session.user.email);
             await enterAuthenticatedApp(data.session.user);
+            return;
+        }
+
+        if (!data || !data.session || !data.session.user) {
+            authenticatedUser = null;
+            loadedUserId = null;
+            updateAuthUi();
+            showLoginScreen();
         }
     });
 }
