@@ -17,6 +17,7 @@ let loadedUserId = null;
 let pendingProfileAvatarUrl = '';
 let isLoggingOut = false;
 let initialUserDataHydrated = false;
+let isEnteringApp = false;
 
 const REMOTE_SYNC_DEBOUNCE_MS = 1200;
 
@@ -451,6 +452,11 @@ async function loadSupabaseDataForCurrentUser() {
     if (!client || !authenticatedUser) {
         return false;
     }
+    // Prevent concurrent loads — a load is already in flight.
+    if (isHydratingRemoteData) {
+        console.log('[Waymark] Data load already in progress, skipping duplicate call.');
+        return false;
+    }
 
     const mapReady = await waitForMapRuntime();
     if (!mapReady) {
@@ -716,23 +722,32 @@ async function enterAuthenticatedApp(user) {
     if (!user) {
         return;
     }
+    // Prevent re-entrant calls while a load is already happening.
+    if (isEnteringApp) {
+        console.log('[Waymark] enterAuthenticatedApp already in progress, skipping.');
+        return;
+    }
+    isEnteringApp = true;
+    try {
+        // Use the session user directly — it's already validated by onAuthStateChange/getSession
+        authenticatedUser = user;
+        isGuestMode = false;
+        enterApp(`User: ${authenticatedUser.email}`, false);
+        updateAuthUi();
 
-    // Use the session user directly — it's already validated by onAuthStateChange/getSession
-    authenticatedUser = user;
-    isGuestMode = false;
-    enterApp(`User: ${authenticatedUser.email}`, false);
-    updateAuthUi();
+        const shouldLoadRemoteData = loadedUserId !== user.id ||
+            (journalEntries.length === 0 && pointStore.size === 0 && stories.length === 0);
 
-    const shouldLoadRemoteData = loadedUserId !== user.id ||
-        (journalEntries.length === 0 && pointStore.size === 0 && stories.length === 0);
-
-    if (shouldLoadRemoteData) {
-        initialUserDataHydrated = false;
-        const didLoadRemoteData = await loadSupabaseDataForCurrentUser();
-        loadedUserId = didLoadRemoteData ? user.id : null;
-        initialUserDataHydrated = !!didLoadRemoteData;
-    } else if (loadedUserId === user.id) {
-        initialUserDataHydrated = true;
+        if (shouldLoadRemoteData) {
+            initialUserDataHydrated = false;
+            const didLoadRemoteData = await loadSupabaseDataForCurrentUser();
+            loadedUserId = didLoadRemoteData ? user.id : null;
+            initialUserDataHydrated = !!didLoadRemoteData;
+        } else if (loadedUserId === user.id) {
+            initialUserDataHydrated = true;
+        }
+    } finally {
+        isEnteringApp = false;
     }
 }
 
@@ -836,6 +851,7 @@ async function handleLogoutAction() {
         authenticatedUser = null;
         loadedUserId = null;
         initialUserDataHydrated = false;
+        isEnteringApp = false;
         closeProfileModal();
         clearLocalDataState();
         updateAuthUi();
@@ -891,9 +907,17 @@ function initializeSupabaseAuth() {
             return;
         }
 
-        if (session && session.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
-            console.log('[Waymark] Restoring session for user:', session.user.email);
+        if (session && session.user && event === 'SIGNED_IN') {
+            console.log('[Waymark] SIGNED_IN for user:', session.user.email);
             await enterAuthenticatedApp(session.user);
+            return;
+        }
+
+        // Token refresh: just update the stored user object, don't re-enter the full app flow.
+        if (session && session.user && (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
+            console.log('[Waymark] Token/user update, refreshing user object for:', session.user.email);
+            authenticatedUser = session.user;
+            updateAuthUi();
             return;
         }
 
