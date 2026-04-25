@@ -774,7 +774,7 @@ async function loadGalleryPage(reset) {
                 const storyTitle = s.title || 'Untitled';
                 showPreviewBanner(storyTitle);
                 if (typeof fetchStoryPreviewEntries === 'function') {
-                    const rows = await fetchStoryPreviewEntries(s.story_id);
+                    const rows = await fetchStoryPreviewEntries(s.story_id, s.user_id);
                     if (rows.length && typeof showStoryPreview === 'function') {
                         showStoryPreview(rows);
                     } else {

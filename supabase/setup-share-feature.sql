@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS public.story_shares (
   shared_with_email   TEXT        NOT NULL,
   shared_with_user_id UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at          TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (story_id, shared_with_email)
+  UNIQUE (owner_id, story_id, shared_with_email)
 );
 ALTER TABLE public.story_shares ENABLE ROW LEVEL SECURITY;
 

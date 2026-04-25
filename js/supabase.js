@@ -908,14 +908,19 @@ async function fetchSharedStories() {
         .select('story_id, owner_id')
         .eq('shared_with_user_id', authenticatedUser.id);
     if (sharesErr || !shares || !shares.length) return { stories: [], profiles: {} };
+
+    const sharedPairs = new Set(shares.map(s => `${s.owner_id}:${s.story_id}`));
     const storyIds = shares.map(s => s.story_id);
     const { data, error } = await client
         .from('stories')
         .select('story_id, user_id, title, description, center_lat, center_lon')
         .in('story_id', storyIds);
     if (error) { console.warn('fetchSharedStories error', error); return { stories: [], profiles: {} }; }
-    const profiles = await fetchProfilesForUserIds((data || []).map(r => r.user_id));
-    return { stories: data || [], profiles };
+
+    // story_id is not globally unique across users; keep only exact owner+story matches.
+    const filteredStories = (data || []).filter(r => sharedPairs.has(`${r.user_id}:${r.story_id}`));
+    const profiles = await fetchProfilesForUserIds(filteredStories.map(r => r.user_id));
+    return { stories: filteredStories, profiles };
 }
 
 async function fetchProfilesForUserIds(userIds) {
@@ -950,7 +955,7 @@ async function shareStory(storyId, emails) {
             shared_with_user_id: uidData || null
         });
     }
-    const { error } = await client.from('story_shares').upsert(rows, { onConflict: 'story_id,shared_with_email' });
+    const { error } = await client.from('story_shares').upsert(rows, { onConflict: 'owner_id,story_id,shared_with_email' });
     if (error) {
         if (statusEl) statusEl.textContent = 'Error: ' + error.message;
         return { error };
@@ -974,10 +979,13 @@ async function shareStory(storyId, emails) {
     return { success: true };
 }
 
-    async function fetchStoryPreviewEntries(storyId) {
-        const client = getSupabaseClient();
-        if (!client) return [];
-        const { data, error } = await client.rpc('get_story_preview_entries', { p_story_id: storyId });
-        if (error) { console.warn('fetchStoryPreviewEntries error', error); return []; }
-        return data || [];
-    }
+async function fetchStoryPreviewEntries(storyId, ownerId) {
+    const client = getSupabaseClient();
+    if (!client) return [];
+    const { data, error } = await client.rpc('get_story_preview_entries', {
+        p_story_id: storyId,
+        p_owner_id: ownerId
+    });
+    if (error) { console.warn('fetchStoryPreviewEntries error', error); return []; }
+    return data || [];
+}
