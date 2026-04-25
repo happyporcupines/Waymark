@@ -2,3 +2,9 @@
 modules.xml
 vcs.xml
 Waymark.iml
+
+# Node / Electron
+node_modules/
+dist/
+out/
+*.log

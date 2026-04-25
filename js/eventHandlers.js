@@ -202,6 +202,14 @@ document.addEventListener('click', (event) => {
  * - Toggling story visibility
  * - Color picker interactions
  */
+// PDF scope dropdown: show/hide story picker
+document.addEventListener('change', (event) => {
+    if (event.target && event.target.id === 'pdfScopeSelect') {
+        const wrap = document.getElementById('pdfStorySelectWrap');
+        if (wrap) wrap.style.display = event.target.value === 'story' ? 'block' : 'none';
+    }
+});
+
 document.addEventListener('click', (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
@@ -248,10 +256,18 @@ document.addEventListener('click', (event) => {
         return;
     }
     if (target.closest('#exportPdfBtn')) {
-        alert('PDF export is coming next. Runtime checks and button wiring are now enabled.');
+        if (typeof openPdfExportModal === 'function') openPdfExportModal();
         return;
     }
     if (target.closest('#closeGalleryBtn')) { document.getElementById('galleryModal').style.display = 'none'; return; }
+        if (target.closest('#cancelPdfExportBtn')) {
+            if (typeof closePdfExportModal === 'function') closePdfExportModal();
+            return;
+        }
+        if (target.closest('#confirmPdfExportBtn')) {
+            if (typeof performPdfExport === 'function') performPdfExport();
+            return;
+        }
     if (target.closest('#myStoriesFromGalleryBtn')) {
         document.getElementById('galleryModal').style.display = 'none';
         openStoriesModal();

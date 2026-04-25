@@ -351,7 +351,46 @@
 <script src="js/map.js"></script>
 <script src="js/config.js"></script>
 <script src="js/supabase.js"></script>
+<script src="js/pdf.js"></script>
 <script src="js/eventHandlers.js"></script>
 <script src="js/pwa.js"></script>
+
+<!-- PDF Export Modal -->
+<div id="pdfExportModal" class="overlay" style="display: none; z-index: 130;">
+    <div class="entry-modal-box" style="max-width: 520px;">
+        <h3 style="margin-top: 0;">Export as PDF</h3>
+        <p style="margin: 0 0 16px; color: #555; font-size: 0.9em;">Choose what to include in your export.</p>
+
+        <label for="pdfScopeSelect" style="font-weight: bold;">What to export</label>
+        <select id="pdfScopeSelect" style="width: 100%; padding: 8px; margin: 6px 0 14px; border: 1px solid #ccc; border-radius: 4px;">
+            <option value="all">All entries</option>
+            <option value="story">A specific story</option>
+        </select>
+
+        <div id="pdfStorySelectWrap" style="display: none;">
+            <label for="pdfStorySelect" style="font-weight: bold;">Choose story</label>
+            <select id="pdfStorySelect" style="width: 100%; padding: 8px; margin: 6px 0 14px; border: 1px solid #ccc; border-radius: 4px;"></select>
+        </div>
+
+        <label style="font-weight: bold;">Page size</label>
+        <div style="display: flex; gap: 10px; margin: 6px 0 14px;">
+            <label style="font-weight: normal;"><input type="radio" name="pdfPageSize" value="A4" checked /> A4</label>
+            <label style="font-weight: normal;"><input type="radio" name="pdfPageSize" value="Letter" /> Letter</label>
+        </div>
+
+        <label style="font-weight: bold;">Orientation</label>
+        <div style="display: flex; gap: 10px; margin: 6px 0 20px;">
+            <label style="font-weight: normal;"><input type="radio" name="pdfOrientation" value="portrait" checked /> Portrait</label>
+            <label style="font-weight: normal;"><input type="radio" name="pdfOrientation" value="landscape" /> Landscape</label>
+        </div>
+
+        <p id="pdfExportStatus" style="margin: 0 0 12px; font-size: 0.85em; color: #7a273d; min-height: 1.2em;"></p>
+
+        <div class="entry-modal-actions">
+            <button id="cancelPdfExportBtn" type="button" class="cancel-btn">Cancel</button>
+            <button id="confirmPdfExportBtn" type="button" class="save-btn">Export PDF</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>

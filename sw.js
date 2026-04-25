@@ -1,4 +1,4 @@
-const CACHE_NAME = 'waymark-v16';
+const CACHE_NAME = 'waymark-v17';
 const APP_SHELL_FILES = [
     './',
     './index.html',
@@ -12,6 +12,7 @@ const APP_SHELL_FILES = [
     './js/map.js',
     './js/config.js',
     './js/supabase.js',
+    './js/pdf.js',
     './js/eventHandlers.js',
     './js/pwa.js',
     './manifest.webmanifest',
