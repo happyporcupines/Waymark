@@ -21,6 +21,20 @@ let isEnteringApp = false;
 
 const REMOTE_SYNC_DEBOUNCE_MS = 1200;
 
+function isElectronRuntime() {
+    const ua = navigator.userAgent || '';
+    return !!(window.electronAPI || ua.includes('Electron'));
+}
+
+function withTimeout(promise, timeoutMs, label) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+        })
+    ]);
+}
+
 function getAuthRedirectUrl() {
     const cfg = window.WAYMARK_CONFIG || {};
     if (cfg.AUTH_REDIRECT_URL) {
@@ -85,12 +99,16 @@ function getSupabaseClient() {
     }
 
     const cfg = window.WAYMARK_CONFIG;
+    const electronRuntime = isElectronRuntime();
     try {
         supabaseClientInstance = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
             auth: {
                 persistSession: true,
                 autoRefreshToken: true,
-                detectSessionInUrl: true
+                detectSessionInUrl: true,
+                // Electron is effectively single-window here; disabling multi-tab lock
+                // avoids auth-token lock contention that can stall signOut/getSession.
+                multiTab: !electronRuntime
             }
         });
         console.log('[Waymark] Supabase client initialized');
@@ -464,15 +482,20 @@ async function loadSupabaseDataForCurrentUser() {
 
     let entryRows, entryError;
     try {
-        const entryResult = await client
-            .from('entries')
-            .select('*')
-            .eq('user_id', authenticatedUser.id)
-            .order('created_at_ms', { ascending: true });
+        const entryResult = await withTimeout(
+            client
+                .from('entries')
+                .select('*')
+                .eq('user_id', authenticatedUser.id)
+                .order('created_at_ms', { ascending: true }),
+            10000,
+            'entries fetch'
+        );
         entryRows = entryResult.data;
         entryError = entryResult.error;
     } catch (fetchErr) {
         console.error('[Waymark] Entry fetch threw exception:', fetchErr);
+        setAuthStatus('Loading entries took too long. Please retry.', true);
         isHydratingRemoteData = false;
         return false;
     }
@@ -484,11 +507,25 @@ async function loadSupabaseDataForCurrentUser() {
         return false;
     }
 
-    const { data: storyRows, error: storyError } = await client
-        .from('stories')
-        .select('*')
-        .eq('user_id', authenticatedUser.id)
-        .order('story_id', { ascending: true });
+    let storyRows, storyError;
+    try {
+        const storyResult = await withTimeout(
+            client
+                .from('stories')
+                .select('*')
+                .eq('user_id', authenticatedUser.id)
+                .order('story_id', { ascending: true }),
+            10000,
+            'stories fetch'
+        );
+        storyRows = storyResult.data;
+        storyError = storyResult.error;
+    } catch (fetchErr) {
+        console.error('[Waymark] Story fetch threw exception:', fetchErr);
+        setAuthStatus('Loading stories took too long. Please retry.', true);
+        isHydratingRemoteData = false;
+        return false;
+    }
 
     if (storyError) {
         console.error('[Waymark] Story fetch error:', storyError);
@@ -848,7 +885,7 @@ async function handleLogoutAction() {
     try {
         const client = getSupabaseClient();
         if (client) {
-            await client.auth.signOut();
+            await withTimeout(client.auth.signOut(), 6000, 'signOut');
         }
     } catch (error) {
         console.error('[Waymark] Logout error:', error);
