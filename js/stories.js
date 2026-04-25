@@ -777,6 +777,8 @@ async function loadGalleryPage(reset) {
                     const rows = await fetchStoryPreviewEntries(s.story_id);
                     if (rows.length && typeof showStoryPreview === 'function') {
                         showStoryPreview(rows);
+                    } else {
+                        alert('Could not load preview points for this story yet. Please refresh and try again.');
                     }
                 }
             });

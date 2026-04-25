@@ -49,6 +49,7 @@ BEGIN
   FROM public.entries e
   JOIN public.stories s
     ON s.user_id = e.user_id AND s.story_id = p_story_id
-  WHERE s.entry_ids @> to_jsonb(e.entry_id);
+  WHERE s.entry_ids @> jsonb_build_array(e.entry_id)
+  ORDER BY e.created_at ASC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

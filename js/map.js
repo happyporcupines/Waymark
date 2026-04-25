@@ -537,6 +537,14 @@ function updateMapStoryLines() {
         if (!mapInstance) return;
         const color = (entryRows[0] && entryRows[0].line_color) || '#a43855';
 
+        // Hide normal user layers so only preview story points are visible.
+        if (mapInstance.getLayer('entries-layer')) {
+            mapInstance.setLayoutProperty('entries-layer', 'visibility', 'none');
+        }
+        if (mapInstance.getLayer('story-lines-layer')) {
+            mapInstance.setLayoutProperty('story-lines-layer', 'visibility', 'none');
+        }
+
         const pointFeatures = entryRows.map(r => ({
             type: 'Feature',
             geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
@@ -571,4 +579,12 @@ function updateMapStoryLines() {
         if (pSrc) pSrc.setData({ type: 'FeatureCollection', features: [] });
         const lSrc = mapInstance.getSource('preview-line');
         if (lSrc) lSrc.setData({ type: 'FeatureCollection', features: [] });
+
+        // Restore the normal map layers.
+        if (mapInstance.getLayer('entries-layer')) {
+            mapInstance.setLayoutProperty('entries-layer', 'visibility', 'visible');
+        }
+        if (mapInstance.getLayer('story-lines-layer')) {
+            mapInstance.setLayoutProperty('story-lines-layer', 'visibility', 'visible');
+        }
     }
