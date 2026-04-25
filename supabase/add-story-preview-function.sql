@@ -61,7 +61,11 @@ BEGIN
     ON s.user_id = e.user_id
    AND s.story_id = p_story_id
    AND s.user_id = p_owner_id
-  WHERE s.entry_ids @> jsonb_build_array(e.entry_id)
+  WHERE EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements_text(s.entry_ids) AS sid(value)
+    WHERE sid.value::integer = e.entry_id
+  )
   ORDER BY e.created_at ASC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
