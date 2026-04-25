@@ -16,7 +16,6 @@ let syncQueuedDuringFlight = false;
 let loadedUserId = null;
 let pendingProfileAvatarUrl = '';
 let isLoggingOut = false;
-let authBootstrapComplete = false;
 let initialUserDataHydrated = false;
 
 const REMOTE_SYNC_DEBOUNCE_MS = 1200;
@@ -869,7 +868,15 @@ function initializeSupabaseAuth() {
         return;
     }
 
-    // Listen for auth state changes (sign in, sign out, token refresh, session restore on page load)
+    function applySignedOutState() {
+        authenticatedUser = null;
+        loadedUserId = null;
+        initialUserDataHydrated = false;
+        updateAuthUi();
+        showLoginScreen();
+    }
+
+    // Listen for auth changes after initial bootstrap.
     client.auth.onAuthStateChange(async (event, session) => {
         console.log('[Waymark] Auth state changed:', event, session ? 'logged in' : 'logged out');
 
@@ -878,72 +885,36 @@ function initializeSupabaseAuth() {
             console.log('[Waymark] Ignoring auth event during logout:', event);
             return;
         }
-        
-        if (!session || !session.user) {
-            // INITIAL_SESSION can emit logged-out before async storage/session restore settles.
-            // Do not treat this event as authoritative logout.
-            if (event === 'INITIAL_SESSION' && !authBootstrapComplete) {
-                console.log('[Waymark] Ignoring INITIAL_SESSION logged-out during bootstrap');
-                return;
-            }
 
-            // Some refresh flows briefly emit signed-out before restoring a valid session.
-            // Double-check persisted session before wiping local state.
-            try {
-                const { data: recheck } = await client.auth.getSession();
-                if (recheck && recheck.session && recheck.session.user) {
-                    console.log('[Waymark] Session exists after transient signed-out event; ignoring.');
-                    return;
-                }
-            } catch (err) {
-                console.warn('[Waymark] Session recheck failed:', err);
-            }
-
-            // Ignore non-SIGNED_OUT transient events once bootstrap is done.
-            if (event !== 'SIGNED_OUT') {
-                console.log('[Waymark] Ignoring transient logged-out auth event:', event);
-                return;
-            }
-
-            // User is not logged in
-            authenticatedUser = null;
-            loadedUserId = null;
-            initialUserDataHydrated = false;
-            updateAuthUi();
-            showLoginScreen();
+        if (event === 'SIGNED_OUT') {
+            applySignedOutState();
             return;
         }
 
-        // User has an active session - enter the app
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-            authBootstrapComplete = true;
+        if (session && session.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
             console.log('[Waymark] Restoring session for user:', session.user.email);
             await enterAuthenticatedApp(session.user);
-        }
-    });
-
-    // Also explicitly check for any saved session on page load 
-    // This ensures data loads even if auth state listener hasn't fired yet
-    client.auth.getSession().catch(err => {
-        console.error('[Waymark] Error checking stored session:', err);
-    }).then(async (result = {}) => {
-        authBootstrapComplete = true;
-        const { data } = result;
-        // Only restore if we're not already logged in (avoid double-loading)
-        if (data && data.session && data.session.user && !authenticatedUser) {
-            console.log('[Waymark] Restoring session from storage for:', data.session.user.email);
-            await enterAuthenticatedApp(data.session.user);
             return;
         }
 
-        if (!data || !data.session || !data.session.user) {
-            authenticatedUser = null;
-            loadedUserId = null;
-            initialUserDataHydrated = false;
-            updateAuthUi();
-            showLoginScreen();
-        }
+        console.log('[Waymark] Ignoring auth event:', event);
     });
+
+    // Explicit startup bootstrap: source of truth for refresh/session restore.
+    client.auth.getSession()
+        .then(async (result = {}) => {
+            const { data } = result;
+            if (data && data.session && data.session.user) {
+                console.log('[Waymark] Restoring session from storage for:', data.session.user.email);
+                await enterAuthenticatedApp(data.session.user);
+                return;
+            }
+            applySignedOutState();
+        })
+        .catch(err => {
+            console.error('[Waymark] Error checking stored session:', err);
+            applySignedOutState();
+        });
 }
 
 initializeProfileImageControls();
