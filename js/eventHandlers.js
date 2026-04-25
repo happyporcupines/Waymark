@@ -255,6 +255,12 @@ document.addEventListener('click', (event) => {
     // Share modal buttons
     if (target.closest('#cancelShareBtn')) { document.getElementById('shareStoryModal').style.display = 'none'; return; }
     if (target.closest('#sendInviteBtn')) {
+        // Auto-add whatever is still typed in the input (user may not have pressed Enter)
+        const input = document.getElementById('shareEmailInput');
+        if (input && input.value.trim() && input.value.includes('@') && typeof addShareChip === 'function') {
+            addShareChip(input.value.trim());
+            input.value = '';
+        }
         const emails = typeof getShareChipEmails === 'function' ? getShareChipEmails() : [];
         if (!emails.length) { alert('Add at least one email address.'); return; }
         if (typeof shareStory === 'function') {
