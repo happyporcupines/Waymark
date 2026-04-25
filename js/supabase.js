@@ -15,6 +15,7 @@ let syncInFlight = false;
 let syncQueuedDuringFlight = false;
 let loadedUserId = null;
 let pendingProfileAvatarUrl = '';
+let isLoggingOut = false;
 
 const REMOTE_SYNC_DEBOUNCE_MS = 1200;
 
@@ -806,6 +807,7 @@ async function handleSignupAction(email, password) {
 }
 
 async function handleLogoutAction() {
+    isLoggingOut = true;
     try {
         const client = getSupabaseClient();
         if (client) {
@@ -822,6 +824,11 @@ async function handleLogoutAction() {
     updateAuthUi();
     showLoginScreen();
     setAuthStatus('Signed out.');
+
+    // Give auth listeners a moment to settle before allowing new auth events.
+    setTimeout(() => {
+        isLoggingOut = false;
+    }, 1500);
 }
 
 function initializeSupabaseAuth() {
@@ -846,8 +853,26 @@ function initializeSupabaseAuth() {
     // Listen for auth state changes (sign in, sign out, token refresh, session restore on page load)
     client.auth.onAuthStateChange(async (event, session) => {
         console.log('[Waymark] Auth state changed:', event, session ? 'logged in' : 'logged out');
+
+        // During manual logout, ignore follow-up auth events to prevent bounce-back.
+        if (isLoggingOut) {
+            console.log('[Waymark] Ignoring auth event during logout:', event);
+            return;
+        }
         
         if (!session || !session.user) {
+            // Some refresh flows briefly emit signed-out before restoring a valid session.
+            // Double-check persisted session before wiping local state.
+            try {
+                const { data: recheck } = await client.auth.getSession();
+                if (recheck && recheck.session && recheck.session.user) {
+                    console.log('[Waymark] Session exists after transient signed-out event; ignoring.');
+                    return;
+                }
+            } catch (err) {
+                console.warn('[Waymark] Session recheck failed:', err);
+            }
+
             // User is not logged in
             authenticatedUser = null;
             loadedUserId = null;
