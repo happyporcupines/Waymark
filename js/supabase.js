@@ -389,7 +389,6 @@ async function saveProfileChanges() {
 }
 
 function clearLocalDataState() {
-    console.log('[Waymark] clearLocalDataState: wiping in-memory state', new Error().stack.split('\n')[2].trim());
     if (appGraphicsLayer) {
         appGraphicsLayer.removeAll();
     }
@@ -462,7 +461,6 @@ async function loadSupabaseDataForCurrentUser() {
     console.log('[Waymark] loadSupabaseDataForCurrentUser: starting load for', authenticatedUser.id);
 
     isHydratingRemoteData = true;
-    console.log('[Waymark] about to fetch entries from Supabase...');
 
     let entryRows, entryError;
     try {
@@ -478,7 +476,6 @@ async function loadSupabaseDataForCurrentUser() {
         isHydratingRemoteData = false;
         return false;
     }
-    console.log('[Waymark] entries fetch returned — error:', entryError, '| rows:', (entryRows || []).length);
 
     if (entryError) {
         console.error('[Waymark] Entry fetch error:', entryError);
@@ -486,7 +483,6 @@ async function loadSupabaseDataForCurrentUser() {
         isHydratingRemoteData = false;
         return false;
     }
-    console.log('[Waymark] Fetched', (entryRows || []).length, 'entries from Supabase');
 
     const { data: storyRows, error: storyError } = await client
         .from('stories')
@@ -500,10 +496,8 @@ async function loadSupabaseDataForCurrentUser() {
         isHydratingRemoteData = false;
         return false;
     }
-    console.log('[Waymark] Fetched', (storyRows || []).length, 'stories from Supabase');
 
     // Only replace in-memory state after successful remote fetches.
-    console.log('[Waymark] clearLocalDataState called from loadSupabaseDataForCurrentUser');
     clearLocalDataState();
 
     let maxEntryId = 0;
@@ -749,23 +743,16 @@ async function enterAuthenticatedApp(user) {
         const shouldLoadRemoteData = loadedUserId !== user.id ||
             (journalEntries.length === 0 && pointStore.size === 0 && stories.length === 0);
 
-        console.log('[Waymark] enterAuthenticatedApp: shouldLoadRemoteData =', shouldLoadRemoteData,
-            '| loadedUserId =', loadedUserId, '| user.id =', user.id,
-            '| journalEntries =', journalEntries.length, '| pointStore =', pointStore.size, '| stories =', stories.length);
-
         if (shouldLoadRemoteData) {
             initialUserDataHydrated = false;
             const didLoadRemoteData = await loadSupabaseDataForCurrentUser();
-            console.log('[Waymark] enterAuthenticatedApp: didLoadRemoteData =', didLoadRemoteData);
             loadedUserId = didLoadRemoteData ? user.id : null;
             initialUserDataHydrated = !!didLoadRemoteData;
         } else if (loadedUserId === user.id) {
             initialUserDataHydrated = true;
-            console.log('[Waymark] enterAuthenticatedApp: skipped load — data already present for this user');
         }
     } finally {
         isEnteringApp = false;
-        console.log('[Waymark] enterAuthenticatedApp: finished. journalEntries =', journalEntries.length, '| stories =', stories.length);
     }
 }
 
