@@ -39,7 +39,10 @@ BEGIN
       SELECT 1 FROM public.story_shares ss
       WHERE ss.story_id = p_story_id
         AND ss.owner_id = p_owner_id
-        AND ss.shared_with_user_id = auth.uid()
+        AND (
+          ss.shared_with_user_id = auth.uid()
+          OR lower(ss.shared_with_email) = lower(coalesce((auth.jwt() ->> 'email')::text, ''))
+        )
     )
   ) THEN
     RETURN;  -- empty result – caller has no access

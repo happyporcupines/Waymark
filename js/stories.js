@@ -765,20 +765,20 @@ async function loadGalleryPage(reset) {
             // Click → open map preview
             card.style.cursor = 'pointer';
             card.addEventListener('click', async () => {
-                document.getElementById('galleryModal').style.display = 'none';
-                    // Show the map view (switch mobile nav to map if needed)
-                    const mapContainer = document.querySelector('.map-container');
-                    if (mapContainer) mapContainer.style.display = 'block';
-                    const sidebar = document.getElementById('sidebar');
-                    if (sidebar) sidebar.classList.remove('active');
                 const storyTitle = s.title || 'Untitled';
-                showPreviewBanner(storyTitle);
                 if (typeof fetchStoryPreviewEntries === 'function') {
                     const rows = await fetchStoryPreviewEntries(s.story_id, s.user_id);
                     if (rows.length && typeof showStoryPreview === 'function') {
+                        document.getElementById('galleryModal').style.display = 'none';
+                        // Show the map view (switch mobile nav to map if needed)
+                        const mapContainer = document.querySelector('.map-container');
+                        if (mapContainer) mapContainer.style.display = 'block';
+                        const sidebar = document.getElementById('sidebar');
+                        if (sidebar) sidebar.classList.remove('active');
+                        showPreviewBanner(storyTitle);
                         showStoryPreview(rows);
                     } else {
-                        alert('Could not load preview points for this story yet. Please refresh and try again.');
+                        alert('Could not load preview points for this story yet. Please try opening it again in a moment.');
                     }
                 }
             });

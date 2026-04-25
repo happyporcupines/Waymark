@@ -1007,10 +1007,22 @@ async function shareStory(storyId, emails) {
 async function fetchStoryPreviewEntries(storyId, ownerId) {
     const client = getSupabaseClient();
     if (!client) return [];
-    const { data, error } = await client.rpc('get_story_preview_entries', {
+    let { data, error } = await client.rpc('get_story_preview_entries', {
         p_story_id: storyId,
         p_owner_id: ownerId
     });
-    if (error) { console.warn('fetchStoryPreviewEntries error', error); return []; }
+
+    // Backward compatibility: if the DB function hasn't been upgraded yet,
+    // retry the older one-argument signature.
+    if (error && /function\s+public\.get_story_preview_entries\(p_story_id\s*=>\s*integer,\s*p_owner_id\s*=>\s*uuid\)|does not exist/i.test(error.message || '')) {
+        const legacy = await client.rpc('get_story_preview_entries', { p_story_id: storyId });
+        data = legacy.data;
+        error = legacy.error;
+    }
+
+    if (error) {
+        console.warn('fetchStoryPreviewEntries error', error);
+        return [];
+    }
     return data || [];
 }
