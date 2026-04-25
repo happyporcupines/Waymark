@@ -870,13 +870,13 @@ async function handleLogoutAction() {
         loadedUserId = null;
         initialUserDataHydrated = false;
         isEnteringApp = false;
+        isHydratingRemoteData = false;
         closeProfileModal();
         clearLocalDataState();
         updateAuthUi();
         showLoginScreen();
         setAuthStatus('Signed out.');
 
-        // Give auth listeners a moment to settle before allowing new auth events.
         setTimeout(() => {
             isLoggingOut = false;
         }, 1500);
@@ -910,7 +910,12 @@ function initializeSupabaseAuth() {
         showLoginScreen();
     }
 
-    // Listen for auth changes after initial bootstrap.
+    // On page load, onAuthStateChange fires SIGNED_IN from localStorage before getSession()
+    // resolves. Starting a data fetch there races with getSession()'s internal token-refresh
+    // lock and causes the fetch to hang. We use this flag to skip SIGNED_IN on initial load
+    // and let getSession() be the sole bootstrap trigger.
+    let initialLoadComplete = false;
+
     client.auth.onAuthStateChange(async (event, session) => {
         console.log('[Waymark] Auth state changed:', event, session ? 'logged in' : 'logged out');
 
@@ -925,35 +930,45 @@ function initializeSupabaseAuth() {
             return;
         }
 
-        if (session && session.user && event === 'SIGNED_IN') {
-            console.log('[Waymark] SIGNED_IN for user:', session.user.email);
-            await enterAuthenticatedApp(session.user);
+        // Token refresh: just update the stored user object.
+        if (session && session.user && (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
+            console.log('[Waymark] Token/user update for:', session.user.email);
+            authenticatedUser = session.user;
+            updateAuthUi();
             return;
         }
 
-        // Token refresh: just update the stored user object, don't re-enter the full app flow.
-        if (session && session.user && (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
-            console.log('[Waymark] Token/user update, refreshing user object for:', session.user.email);
-            authenticatedUser = session.user;
-            updateAuthUi();
+        // SIGNED_IN on initial page load is handled by getSession() below.
+        // Only act on SIGNED_IN here for real login actions (after initial load).
+        if (session && session.user && event === 'SIGNED_IN') {
+            if (!initialLoadComplete) {
+                console.log('[Waymark] SIGNED_IN on initial load — deferring to getSession()');
+                return;
+            }
+            console.log('[Waymark] SIGNED_IN (post-load) for:', session.user.email);
+            await enterAuthenticatedApp(session.user);
             return;
         }
 
         console.log('[Waymark] Ignoring auth event:', event);
     });
 
-    // Explicit startup bootstrap: source of truth for refresh/session restore.
+    // Sole bootstrap trigger on page load. Resolves only after token refresh is complete,
+    // so any data fetch started here won't race with the internal lock.
     client.auth.getSession()
         .then(async (result = {}) => {
+            initialLoadComplete = true;
             const { data } = result;
             if (data && data.session && data.session.user) {
-                console.log('[Waymark] Restoring session from storage for:', data.session.user.email);
+                console.log('[Waymark] getSession: restoring session for', data.session.user.email);
                 await enterAuthenticatedApp(data.session.user);
                 return;
             }
+            console.log('[Waymark] getSession: no session found');
             applySignedOutState();
         })
         .catch(err => {
+            initialLoadComplete = true;
             console.error('[Waymark] Error checking stored session:', err);
             applySignedOutState();
         });
