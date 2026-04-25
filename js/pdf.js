@@ -255,21 +255,27 @@ async function performPdfExport() {
 
     const content = await buildPdfContent(scope, storyId, pageSize, landscape);
 
-    const printWindow = window.open('', '_blank', 'width=1000,height=800');
-    if (!printWindow) {
-        if (statusEl) statusEl.textContent = 'Pop-up blocked. Please allow pop-ups for this site.';
+    const printFrame = document.createElement('iframe');
+    printFrame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+    document.body.appendChild(printFrame);
+
+    const frameWindow = printFrame.contentWindow;
+    const frameDocument = printFrame.contentDocument || (frameWindow && frameWindow.document);
+    if (!frameWindow || !frameDocument) {
+        printFrame.remove();
+        if (statusEl) statusEl.textContent = 'Could not open print document in this browser.';
         return;
     }
 
-    printWindow.document.open();
-    printWindow.document.write(content);
-    printWindow.document.close();
-    printWindow.focus();
+    frameDocument.open();
+    frameDocument.write(content);
+    frameDocument.close();
 
-    // Let fonts/images/layout settle before print to avoid blank map image.
+    // Let layout settle before printing, then clean up.
     setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
+        frameWindow.focus();
+        frameWindow.print();
+        setTimeout(() => printFrame.remove(), 1000);
     }, 700);
 
     closePdfExportModal();
