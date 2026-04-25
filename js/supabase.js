@@ -973,3 +973,11 @@ async function shareStory(storyId, emails) {
     if (statusEl) statusEl.textContent = `Invite sent to ${emails.join(', ')}!`;
     return { success: true };
 }
+
+    async function fetchStoryPreviewEntries(storyId) {
+        const client = getSupabaseClient();
+        if (!client) return [];
+        const { data, error } = await client.rpc('get_story_preview_entries', { p_story_id: storyId });
+        if (error) { console.warn('fetchStoryPreviewEntries error', error); return []; }
+        return data || [];
+    }

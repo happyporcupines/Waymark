@@ -1298,3 +1298,41 @@ p, small, span, div, button, input, textarea {
     display: flex;
     align-items: center;
 }
+
+    /* ========================================
+       STORY PREVIEW BANNER
+       ======================================== */
+
+    .preview-banner {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 90;
+        background: rgba(20, 20, 20, 0.88);
+        color: white;
+        padding: 10px 16px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 0.95em;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+        white-space: nowrap;
+        max-width: 90vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .preview-banner-close {
+        background: #a43855;
+        border: none;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.85em;
+        font-weight: bold;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }

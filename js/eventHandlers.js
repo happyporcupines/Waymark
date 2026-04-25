@@ -132,6 +132,10 @@ document.addEventListener('click', (event) => {
         closeDetailPanel();
         return;
     }
+        if (target.closest('#closePreviewBtn')) {
+            if (typeof hidePreviewBanner === 'function') hidePreviewBanner();
+            return;
+        }
     if (target.closest('#cancelProfileBtn')) {
         if (typeof closeProfileModal === 'function') {
             closeProfileModal();

@@ -122,6 +122,38 @@ function initMap() {
             }
             
             // Make entry markers interactive
+
+                // ── Preview sources/layers (gallery story preview) ──
+                if (!map.getSource('preview-line')) {
+                    map.addSource('preview-line', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+                }
+                if (!map.getLayer('preview-line-layer')) {
+                    map.addLayer({
+                        id: 'preview-line-layer',
+                        type: 'line',
+                        source: 'preview-line',
+                        paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-opacity': 0.8 }
+                    }, 'entries-layer');
+                }
+                if (!map.getSource('preview-points')) {
+                    map.addSource('preview-points', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+                }
+                if (!map.getLayer('preview-points-layer')) {
+                    map.addLayer({
+                        id: 'preview-points-layer',
+                        type: 'circle',
+                        source: 'preview-points',
+                        paint: {
+                            'circle-radius': 9,
+                            'circle-color': ['get', 'color'],
+                            'circle-opacity': 0.9,
+                            'circle-stroke-width': 2,
+                            'circle-stroke-color': '#fff'
+                        }
+                    });
+                }
+
+                // Make entry markers interactive
             map.on('click', 'entries-layer', handleEntryClick);
             map.on('mouseenter', 'entries-layer', () => {
                 map.getCanvas().style.cursor = 'pointer';
@@ -492,3 +524,51 @@ function updateMapStoryLines() {
         });
     }
 }
+
+    // ============================================================
+    // GALLERY STORY PREVIEW
+    // ============================================================
+
+    /**
+     * Renders a gallery story on the map as a preview overlay.
+     * @param {Array<{entry_id,lat,lon,title,line_color,story_title}>} entryRows
+     */
+    function showStoryPreview(entryRows) {
+        if (!mapInstance) return;
+        const color = (entryRows[0] && entryRows[0].line_color) || '#a43855';
+
+        const pointFeatures = entryRows.map(r => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
+            properties: { title: r.title || '', color }
+        }));
+
+        const lineFeature = entryRows.length >= 2 ? [{
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: entryRows.map(r => [r.lon, r.lat]) },
+            properties: { color }
+        }] : [];
+
+        const pSrc = mapInstance.getSource('preview-points');
+        if (pSrc) pSrc.setData({ type: 'FeatureCollection', features: pointFeatures });
+        const lSrc = mapInstance.getSource('preview-line');
+        if (lSrc) lSrc.setData({ type: 'FeatureCollection', features: lineFeature });
+
+        // Fit map to preview bounds
+        if (entryRows.length > 0) {
+            const lngs = entryRows.map(r => r.lon);
+            const lats = entryRows.map(r => r.lat);
+            mapInstance.fitBounds(
+                [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+                { padding: 80, maxZoom: 13, duration: 800 }
+            );
+        }
+    }
+
+    function clearStoryPreview() {
+        if (!mapInstance) return;
+        const pSrc = mapInstance.getSource('preview-points');
+        if (pSrc) pSrc.setData({ type: 'FeatureCollection', features: [] });
+        const lSrc = mapInstance.getSource('preview-line');
+        if (lSrc) lSrc.setData({ type: 'FeatureCollection', features: [] });
+    }

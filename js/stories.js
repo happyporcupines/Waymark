@@ -632,6 +632,19 @@ function toggleStoryVisibility(storyId) {
 // ==========================================
 // SHARE STORY MODAL
 // ==========================================
+function showPreviewBanner(storyTitle) {
+    let banner = document.getElementById('previewBanner');
+    if (!banner) return;
+    document.getElementById('previewBannerTitle').textContent = storyTitle;
+    banner.style.display = 'flex';
+}
+
+function hidePreviewBanner() {
+    const banner = document.getElementById('previewBanner');
+    if (banner) banner.style.display = 'none';
+    if (typeof clearStoryPreview === 'function') clearStoryPreview();
+}
+
 
 let _currentShareStoryId = null;
 
@@ -749,6 +762,24 @@ async function loadGalleryPage(reset) {
             </div>
         `;
         grid.appendChild(card);
+            // Click → open map preview
+            card.style.cursor = 'pointer';
+            card.addEventListener('click', async () => {
+                document.getElementById('galleryModal').style.display = 'none';
+                    // Show the map view (switch mobile nav to map if needed)
+                    const mapContainer = document.querySelector('.map-container');
+                    if (mapContainer) mapContainer.style.display = 'block';
+                    const sidebar = document.getElementById('sidebar');
+                    if (sidebar) sidebar.classList.remove('active');
+                const storyTitle = s.title || 'Untitled';
+                showPreviewBanner(storyTitle);
+                if (typeof fetchStoryPreviewEntries === 'function') {
+                    const rows = await fetchStoryPreviewEntries(s.story_id);
+                    if (rows.length && typeof showStoryPreview === 'function') {
+                        showStoryPreview(rows);
+                    }
+                }
+            });
     });
 
     if (_galleryTab === 'public') {
