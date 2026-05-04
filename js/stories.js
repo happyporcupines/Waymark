@@ -705,6 +705,14 @@ let _galleryOffset = 0;
 let _galleryTab = 'public';
 const GALLERY_PAGE_SIZE = 12;
 
+function renderGalleryMessage(message, tone) {
+    const grid = document.getElementById('galleryGrid');
+    if (!grid) return;
+
+    const color = tone === 'error' ? '#a43855' : '#888';
+    grid.innerHTML = `<p style="padding: 40px; text-align: center; color: ${color}; grid-column: 1 / -1;">${escapeHtml(message)}</p>`;
+}
+
 async function openGalleryModal(tab) {
     _galleryTab = tab || 'public';
     _galleryOffset = 0;
@@ -716,8 +724,7 @@ async function openGalleryModal(tab) {
     document.getElementById('galleryTabPublic').classList.toggle('gallery-tab--active', _galleryTab === 'public');
     document.getElementById('galleryTabShared').classList.toggle('gallery-tab--active', _galleryTab === 'shared');
 
-    const grid = document.getElementById('galleryGrid');
-    grid.innerHTML = '<p style="padding: 40px; text-align: center; color: #888; grid-column: 1 / -1;">Loading stories...</p>';
+    renderGalleryMessage('Loading stories...');
     document.getElementById('loadMoreGalleryBtn').style.display = 'none';
 
     await loadGalleryPage(true);
@@ -725,19 +732,48 @@ async function openGalleryModal(tab) {
 
 async function loadGalleryPage(reset) {
     const grid = document.getElementById('galleryGrid');
-    let result;
-    if (_galleryTab === 'shared') {
-        result = typeof fetchSharedStories === 'function' ? await fetchSharedStories() : { stories: [], profiles: {} };
-    } else {
-        result = typeof fetchPublicStories === 'function' ? await fetchPublicStories(_galleryOffset, GALLERY_PAGE_SIZE) : { stories: [], profiles: {} };
+    const loadMoreBtn = document.getElementById('loadMoreGalleryBtn');
+    let result = { stories: [], profiles: {}, error: null, emptyMessage: '' };
+
+    try {
+        if (_galleryTab === 'shared') {
+            result = typeof fetchSharedStories === 'function'
+                ? await fetchSharedStories()
+                : { stories: [], profiles: {}, error: 'Shared stories are unavailable right now.' };
+        } else {
+            result = typeof fetchPublicStories === 'function'
+                ? await fetchPublicStories(_galleryOffset, GALLERY_PAGE_SIZE)
+                : { stories: [], profiles: {}, error: 'Public stories are unavailable right now.' };
+        }
+    } catch (error) {
+        console.warn('loadGalleryPage error', error);
+        result = {
+            stories: [],
+            profiles: {},
+            error: _galleryTab === 'shared'
+                ? 'Could not load stories shared with you. Please try again.'
+                : 'Could not load the story gallery. Please try again.'
+        };
     }
-    const { stories: galleryStories = [], profiles = {} } = result;
+
+    const {
+        stories: galleryStories = [],
+        profiles = {},
+        error,
+        emptyMessage
+    } = result;
 
     if (reset) grid.innerHTML = '';
 
+    if (error) {
+        renderGalleryMessage(error, 'error');
+        loadMoreBtn.style.display = 'none';
+        return;
+    }
+
     if (!galleryStories.length && reset) {
-        grid.innerHTML = '<p style="padding: 40px; text-align: center; color: #888; grid-column: 1 / -1;">No stories found.</p>';
-        document.getElementById('loadMoreGalleryBtn').style.display = 'none';
+        renderGalleryMessage(emptyMessage || (_galleryTab === 'shared' ? 'No stories have been shared with you yet.' : 'No stories found.'));
+        loadMoreBtn.style.display = 'none';
         return;
     }
 
@@ -767,18 +803,23 @@ async function loadGalleryPage(reset) {
             card.addEventListener('click', async () => {
                 const storyTitle = s.title || 'Untitled';
                 if (typeof fetchStoryPreviewEntries === 'function') {
-                    const rows = await fetchStoryPreviewEntries(s.story_id, s.user_id);
-                    if (rows.length && typeof showStoryPreview === 'function') {
-                        document.getElementById('galleryModal').style.display = 'none';
-                        // Show the map view (switch mobile nav to map if needed)
-                        const mapContainer = document.querySelector('.map-container');
-                        if (mapContainer) mapContainer.style.display = 'block';
-                        const sidebar = document.getElementById('sidebar');
-                        if (sidebar) sidebar.classList.remove('active');
-                        showPreviewBanner(storyTitle);
-                        showStoryPreview(rows);
-                    } else {
-                        alert('Could not load preview points for this story yet. Please try opening it again in a moment.');
+                    try {
+                        const rows = await fetchStoryPreviewEntries(s.story_id, s.user_id);
+                        if (rows.length && typeof showStoryPreview === 'function') {
+                            document.getElementById('galleryModal').style.display = 'none';
+                            // Show the map view (switch mobile nav to map if needed)
+                            const mapContainer = document.querySelector('.map-container');
+                            if (mapContainer) mapContainer.style.display = 'block';
+                            const sidebar = document.getElementById('sidebar');
+                            if (sidebar) sidebar.classList.remove('active');
+                            showPreviewBanner(storyTitle);
+                            showStoryPreview(rows);
+                        } else {
+                            alert('This story does not have any preview points available yet.');
+                        }
+                    } catch (error) {
+                        console.warn('story preview load failed', error);
+                        alert('Could not load preview points for this story. Please try again in a moment.');
                     }
                 }
             });
@@ -786,9 +827,8 @@ async function loadGalleryPage(reset) {
 
     if (_galleryTab === 'public') {
         _galleryOffset += galleryStories.length;
-        const loadMoreBtn = document.getElementById('loadMoreGalleryBtn');
         loadMoreBtn.style.display = galleryStories.length === GALLERY_PAGE_SIZE ? 'inline-block' : 'none';
     } else {
-        document.getElementById('loadMoreGalleryBtn').style.display = 'none';
+        loadMoreBtn.style.display = 'none';
     }
 }

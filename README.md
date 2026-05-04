@@ -92,12 +92,34 @@ Notes:
 - Supabase and ArcGIS network requests stay network-first.
 - Static local assets are cached for improved repeat load and basic offline shell behavior.
 
+## Platform boundaries (single repo, no code forks)
+
+Waymark uses one shared web runtime for all platforms.
+
+- Shared runtime (must stay platform-neutral):
+    - [index.html](index.html)
+    - [css/style.css](css/style.css)
+    - [js/](js/)
+    - [manifest.webmanifest](manifest.webmanifest)
+    - [sw.js](sw.js)
+- Android wrapper (packaging layer only):
+    - Bubblewrap/TWA generated files (created during Android setup)
+    - Android scripts in [package.json](package.json)
+    - Android process docs in [docs/android-playstore-bubblewrap.md](docs/android-playstore-bubblewrap.md)
+
+Rule of thumb:
+
+- If a change affects browser behavior, make it in shared runtime files.
+- If a change affects Play Store packaging/signing/domain linking, keep it in Android wrapper/config files.
+
+See [docs/platform-boundaries.md](docs/platform-boundaries.md) for the contributor checklist.
+
 ## Run locally
 
 Use any local static server (recommended, do not use file://):
 
 ```bash
-python3 -m http.server 8080
+npm run web:serve
 ```
 
 Then open `http://localhost:8080`.

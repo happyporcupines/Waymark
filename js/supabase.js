@@ -1009,26 +1009,73 @@ async function fetchPublicStories(offset, limit) {
     offset = offset || 0;
     limit = limit || 12;
     const client = getSupabaseClient();
-    if (!client) return { stories: [], profiles: {} };
+    if (!client) {
+        return {
+            stories: [],
+            profiles: {},
+            error: 'Gallery is unavailable until the app reconnects.'
+        };
+    }
     const { data, error } = await client
         .from('stories')
         .select('story_id, user_id, title, description, center_lat, center_lon')
         .eq('is_public', true)
         .order('story_id', { ascending: false })
         .range(offset, offset + limit - 1);
-    if (error) { console.warn('fetchPublicStories error', error); return { stories: [], profiles: {} }; }
+    if (error) {
+        console.warn('fetchPublicStories error', error);
+        return {
+            stories: [],
+            profiles: {},
+            error: 'Could not load public stories right now.'
+        };
+    }
     const profiles = await fetchProfilesForUserIds((data || []).map(r => r.user_id));
-    return { stories: data || [], profiles };
+    return {
+        stories: data || [],
+        profiles,
+        error: null,
+        emptyMessage: 'No public stories have been shared yet.'
+    };
 }
 
 async function fetchSharedStories() {
     const client = getSupabaseClient();
-    if (!client || !authenticatedUser) return { stories: [], profiles: {} };
+    if (!client) {
+        return {
+            stories: [],
+            profiles: {},
+            error: 'Shared stories are unavailable until the app reconnects.'
+        };
+    }
+    if (!authenticatedUser) {
+        return {
+            stories: [],
+            profiles: {},
+            error: null,
+            emptyMessage: 'Sign in to view stories shared with you.'
+        };
+    }
     const { data: shares, error: sharesErr } = await client
         .from('story_shares')
         .select('story_id, owner_id')
         .eq('shared_with_user_id', authenticatedUser.id);
-    if (sharesErr || !shares || !shares.length) return { stories: [], profiles: {} };
+    if (sharesErr) {
+        console.warn('fetchSharedStories share lookup error', sharesErr);
+        return {
+            stories: [],
+            profiles: {},
+            error: 'Could not load stories shared with you right now.'
+        };
+    }
+    if (!shares || !shares.length) {
+        return {
+            stories: [],
+            profiles: {},
+            error: null,
+            emptyMessage: 'No stories have been shared with you yet.'
+        };
+    }
 
     const sharedPairs = new Set(shares.map(s => `${s.owner_id}:${s.story_id}`));
     const storyIds = shares.map(s => s.story_id);
@@ -1036,12 +1083,24 @@ async function fetchSharedStories() {
         .from('stories')
         .select('story_id, user_id, title, description, center_lat, center_lon')
         .in('story_id', storyIds);
-    if (error) { console.warn('fetchSharedStories error', error); return { stories: [], profiles: {} }; }
+    if (error) {
+        console.warn('fetchSharedStories error', error);
+        return {
+            stories: [],
+            profiles: {},
+            error: 'Could not load story details for shared stories.'
+        };
+    }
 
     // story_id is not globally unique across users; keep only exact owner+story matches.
     const filteredStories = (data || []).filter(r => sharedPairs.has(`${r.user_id}:${r.story_id}`));
     const profiles = await fetchProfilesForUserIds(filteredStories.map(r => r.user_id));
-    return { stories: filteredStories, profiles };
+    return {
+        stories: filteredStories,
+        profiles,
+        error: null,
+        emptyMessage: 'No stories have been shared with you yet.'
+    };
 }
 
 async function fetchProfilesForUserIds(userIds) {
@@ -1061,14 +1120,31 @@ async function fetchProfilesForUserIds(userIds) {
 
 async function shareStory(storyId, emails) {
     const client = getSupabaseClient();
-    if (!client || !authenticatedUser || !emails.length) return { error: 'Not logged in or no emails' };
     const statusEl = document.getElementById('shareStatus');
+    if (!client) {
+        if (statusEl) statusEl.textContent = 'Sharing is unavailable until the app reconnects.';
+        return { error: 'Sharing unavailable' };
+    }
+    if (!authenticatedUser) {
+        if (statusEl) statusEl.textContent = 'Sign in before sharing a story.';
+        return { error: 'Not logged in' };
+    }
+    if (!emails.length) {
+        if (statusEl) statusEl.textContent = 'Add at least one email address.';
+        return { error: 'No emails provided' };
+    }
     if (statusEl) statusEl.textContent = 'Looking up recipients...';
 
     const rows = [];
     for (const email of emails) {
         // Look up user ID by email via the DB helper function
-        const { data: uidData } = await client.rpc('get_user_id_by_email', { email_to_find: email });
+        let uidData = null;
+        try {
+            const response = await client.rpc('get_user_id_by_email', { email_to_find: email });
+            uidData = response.data || null;
+        } catch (lookupError) {
+            console.warn('shareStory recipient lookup failed', email, lookupError);
+        }
         rows.push({
             story_id: storyId,
             owner_id: authenticatedUser.id,
@@ -1082,10 +1158,11 @@ async function shareStory(storyId, emails) {
         return { error };
     }
     // Call the Edge Function to send email notifications
+    let notificationWarning = '';
     try {
         const story = stories.find(s => s.id === storyId);
         const { data: profile } = await client.from('profiles').select('display_name').eq('user_id', authenticatedUser.id).single();
-        await client.functions.invoke('share-story', {
+        const { data: notificationResult, error: notificationError } = await client.functions.invoke('share-story', {
             body: {
                 storyTitle: story ? story.title : '',
                 ownerName: (profile && profile.display_name) || authenticatedUser.email,
@@ -1093,11 +1170,17 @@ async function shareStory(storyId, emails) {
                 recipientEmails: emails
             }
         });
+        if (notificationError) {
+            notificationWarning = ' The story was shared, but email notifications could not be sent.';
+        } else if (notificationResult && Array.isArray(notificationResult.failed) && notificationResult.failed.length) {
+            notificationWarning = ` Shared access was saved, but email delivery failed for ${notificationResult.failed.join(', ')}.`;
+        }
     } catch(e) {
         console.warn('Edge function error (non-fatal):', e);
+        notificationWarning = ' The story was shared, but email notifications could not be sent.';
     }
-    if (statusEl) statusEl.textContent = `Invite sent to ${emails.join(', ')}!`;
-    return { success: true };
+    if (statusEl) statusEl.textContent = `Shared with ${emails.join(', ')}.${notificationWarning}`;
+    return { success: true, warning: notificationWarning || null };
 }
 
 async function fetchStoryPreviewEntries(storyId, ownerId) {

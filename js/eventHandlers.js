@@ -288,6 +288,10 @@ document.addEventListener('click', (event) => {
     // Share modal buttons
     if (target.closest('#cancelShareBtn')) { document.getElementById('shareStoryModal').style.display = 'none'; return; }
     if (target.closest('#sendInviteBtn')) {
+        const sendInviteBtn = document.getElementById('sendInviteBtn');
+        if (sendInviteBtn && sendInviteBtn.disabled) {
+            return;
+        }
         // Auto-add whatever is still typed in the input (user may not have pressed Enter)
         const input = document.getElementById('shareEmailInput');
         if (input && input.value.trim() && input.value.includes('@') && typeof addShareChip === 'function') {
@@ -297,11 +301,20 @@ document.addEventListener('click', (event) => {
         const emails = typeof getShareChipEmails === 'function' ? getShareChipEmails() : [];
         if (!emails.length) { alert('Add at least one email address.'); return; }
         if (typeof shareStory === 'function') {
-            shareStory(window._currentShareStoryId, emails).then(result => {
-                if (result && result.success) {
-                    setTimeout(() => { document.getElementById('shareStoryModal').style.display = 'none'; }, 1500);
-                }
-            });
+            if (sendInviteBtn) sendInviteBtn.disabled = true;
+            shareStory(window._currentShareStoryId, emails)
+                .then(result => {
+                    if (result && result.success) {
+                        setTimeout(() => { document.getElementById('shareStoryModal').style.display = 'none'; }, 1500);
+                    }
+                })
+                .catch(error => {
+                    console.warn('shareStory submit failed', error);
+                    alert('Could not share this story right now. Please try again.');
+                })
+                .finally(() => {
+                    if (sendInviteBtn) sendInviteBtn.disabled = false;
+                });
         }
         return;
     }

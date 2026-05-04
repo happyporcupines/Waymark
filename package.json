@@ -5,12 +5,20 @@
   "author": "happyporcupines <happyporcupines@users.noreply.github.com>",
   "main": "electron/main.js",
   "scripts": {
+    "web:serve": "python3 -m http.server 8080",
     "electron": "electron .",
+    "desktop:dev": "npm run electron",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux AppImage",
     "build:linux:deb": "electron-builder --linux deb",
-    "build:all": "electron-builder --win --mac --linux"
+    "build:all": "electron-builder --win --mac --linux",
+    "android:icons": "magick icons/icon-192.svg -background none -resize 192x192 icons/icon-192.png && magick icons/icon-512.svg -background none -resize 512x512 icons/icon-512.png && magick icons/icon-512.svg -background none -resize 512x512 icons/icon-512-maskable.png",
+    "android:check": "node scripts/android-playstore-check.mjs",
+    "android:doctor": "npx @bubblewrap/cli doctor",
+    "android:init": "node scripts/android-init.mjs",
+    "android:build": "npx @bubblewrap/cli build",
+    "android:update": "npx @bubblewrap/cli update"
   },
   "devDependencies": {
     "electron": "^35.0.0",
