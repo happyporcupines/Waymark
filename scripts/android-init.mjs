@@ -10,19 +10,19 @@ if (!rawOrigin) {
     process.exit(1);
 }
 
-let origin;
+let manifestUrl;
 try {
     const parsed = new URL(rawOrigin);
     if (parsed.protocol !== 'https:') {
         throw new Error('Origin must use HTTPS.');
     }
-    origin = parsed.origin;
+    // Preserve the full path (e.g. /Waymark) — .origin strips path so use href instead
+    const base = parsed.href.endsWith('/') ? parsed.href : parsed.href + '/';
+    manifestUrl = `${base}manifest.webmanifest`;
 } catch (error) {
     console.error('Invalid WAYMARK_APP_ORIGIN:', error.message);
     process.exit(1);
 }
-
-const manifestUrl = `${origin}/manifest.webmanifest`;
 console.log(`Initializing Bubblewrap with manifest: ${manifestUrl}`);
 
 execSync(`npx @bubblewrap/cli init --manifest ${manifestUrl}`, {
