@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.happyporcupines.waymark",
+      "sha256_cert_fingerprints": [
+        "83:5C:22:C5:43:12:5E:7E:28:CB:41:C8:5D:D6:EB:C7:C3:76:FA:FA:81:B1:21:6F:E3:1E:70:22:70:76:0F:E4"
+      ]
+    }
+  }
+]
