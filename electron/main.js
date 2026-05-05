@@ -2,30 +2,27 @@ const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electro
 const path = require('path');
 const fs = require('fs');
 
-function configureMaptilerRequestHeaders() {
-    const referer = process.env.WAYMARK_MAPTILER_REFERRER || 'https://happyporcupines.github.io/Waymark/';
-    let origin = 'https://happyporcupines.github.io';
-    try {
-        origin = new URL(referer).origin;
-    } catch (error) {
-        console.warn('[Waymark Electron] Invalid WAYMARK_MAPTILER_REFERRER, using default origin.');
-    }
 
-    session.defaultSession.webRequest.onBeforeSendHeaders(
-        { urls: ['https://api.maptiler.com/*', 'https://*.maptiler.com/*'] },
-        (details, callback) => {
-            const headers = details.requestHeaders || {};
-            if (!headers.Referer && !headers.referer) {
-                headers.Referer = referer;
-            }
-            if (!headers.Origin && !headers.origin) {
-                headers.Origin = origin;
-            }
-            callback({ requestHeaders: headers });
+function configurePermissionHandlers() {
+    const allowedHosts = new Set(['happyporcupines.github.io']);
+
+    const canGrantPermission = (permission, requestingOrigin) => {
+        // Geolocation is always allowed — this is the user's own desktop app.
+        if (permission === 'geolocation') {
+            return true;
         }
-    );
+        return false;
+    };
 
-    console.log('[Waymark Electron] MapTiler request headers configured with referer:', referer);
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+        callback(canGrantPermission(permission, details.requestingOrigin || details.securityOrigin || ''));
+    });
+
+    session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+        return canGrantPermission(permission, requestingOrigin || '');
+    });
+
+    console.log('[Waymark Electron] Permission handlers configured.');
 }
 
 // ============================================================================
@@ -69,7 +66,7 @@ function createWindow() {
 // ============================================================================
 
 app.whenReady().then(() => {
-    configureMaptilerRequestHeaders();
+    configurePermissionHandlers();
     createWindow();
 
     app.on('activate', () => {

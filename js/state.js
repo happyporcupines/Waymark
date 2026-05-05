@@ -198,3 +198,30 @@ let runtimeCapabilities = {
 	supportsNativePdfExport: false,
 	supportsPdfExport: true
 };
+
+/**
+ * Returns true when offline-map features are allowed for this runtime.
+ *
+ * Guard rails:
+ * - Allowed only for Electron desktop app
+ * - Allowed only for Play Store installed TWA-like mode
+ * - Explicitly disallowed on plain web/PWA browser usage
+ *
+ * @returns {boolean}
+ */
+function isOfflineFeatureRuntimeAllowed() {
+	const caps = window.WAYMARK_RUNTIME_CAPS || runtimeCapabilities || {};
+	return !!(caps.supportsOfflineExtentSave && (caps.isElectron || caps.isTwaLike));
+}
+
+/**
+ * Human-readable explanation for why offline features are unavailable.
+ *
+ * @returns {string}
+ */
+function getOfflineFeatureUnavailableMessage() {
+	if (isOfflineFeatureRuntimeAllowed()) {
+		return '';
+	}
+	return 'Offline map features are only available in the Electron app or the Play Store installed app.';
+}

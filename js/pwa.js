@@ -27,16 +27,31 @@ async function detectRuntimeCapabilities() {
     const standalone = isStandaloneInstalledMode();
     const playInstalled = await isLikelyPlayStoreInstall();
 
-    const twaLike = !electron && standalone && playInstalled;
+    // Emulator/debug Android wrapper runs often do not expose
+    // getInstalledRelatedApps() data, so rely on wrapper launch signals too.
+    const ua = navigator.userAgent || '';
+    const androidUa = /Android/i.test(ua);
+    const webViewUa = /\bwv\b|Version\/\d+\.\d+/i.test(ua);
+    const androidAppReferrer = typeof document !== 'undefined'
+        && typeof document.referrer === 'string'
+        && document.referrer.startsWith('android-app://');
+    // Wrapper sessions can appear either as WebView fallback (wv/Version/x)
+    // or as browser-hosted custom tab with android-app referrer.
+    // For installed Android app runs we allow offline-map UI while online so
+    // users can pre-save extents before losing connectivity.
+    const androidWrapperLike = androidAppReferrer || (androidUa && (webViewUa || standalone));
+
+    const twaLike = !electron && (playInstalled || androidWrapperLike || (standalone && androidUa));
     const offlineExtentEnabled = electron || twaLike;
+    const offlineRuntimeAllowed = electron || twaLike;
 
     return {
         platform: electron ? 'electron' : (twaLike ? 'twa' : (standalone ? 'pwa' : 'web')),
         isInstalled: standalone || electron,
         isElectron: electron,
         isTwaLike: twaLike,
-        supportsOfflineExtentSave: offlineExtentEnabled,
-        supportsOfflineTileDownload: offlineExtentEnabled,
+        supportsOfflineExtentSave: offlineRuntimeAllowed && offlineExtentEnabled,
+        supportsOfflineTileDownload: offlineRuntimeAllowed && offlineExtentEnabled,
         supportsNativePdfExport: electron,
         supportsPdfExport: true
     };

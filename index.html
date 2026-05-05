@@ -46,7 +46,7 @@
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <button id="storiesBtn" type="button" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">My Stories 🗺️</button>
             <button id="galleryBtn" type="button" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Gallery 🌍</button>
-            <button id="offlineMapsBtn" type="button" style="display: none; background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Offline Maps ⬇️</button>
+            <button id="offlineMapsBtn" type="button" style="display: none; background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Offline Map ⬇️</button>
             <button id="exportPdfBtn" type="button" style="display: none; background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Export PDF 📄</button>
             <div id="userInfo">Not Logged In</div>
             <button id="logoutBtn" type="button" style="display: none; background: rgba(0,0,0,0.2); border: 1px solid white; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Log Out</button>
@@ -65,6 +65,24 @@
         <!-- Main map container -->
         <div class="map-container">
             <div id="viewDiv"></div>
+            <!-- Location search bar (Nominatim / OSM geocoding) -->
+            <div id="locationSearch" class="location-search">
+                <div class="location-search-row">
+                    <input id="locationSearchInput" type="search" class="location-search-input" placeholder="Search for a place…" autocomplete="off" aria-label="Search for a place" />
+                    <button id="locationSearchClear" class="location-search-clear" type="button" aria-label="Clear search" hidden>✕</button>
+                </div>
+                <ul id="locationSearchResults" class="location-search-results" hidden></ul>
+            </div>
+            <button id="locateMeBtn" type="button" class="map-locate-btn" aria-label="Pan to my location" title="Pan to my location">
+                <svg viewBox="0 0 24 24" class="map-locate-icon" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2" />
+                    <line x1="12" y1="2.5" x2="12" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <line x1="12" y1="18" x2="12" y2="21.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <line x1="2.5" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <line x1="18" y1="12" x2="21.5" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+                <span class="sr-only">Pan to my location</span>
+            </button>
             <div class="map-hint">Tap entries to select them, or long-press (800ms) on the map to add a new entry</div>
             <div id="runtimeFeatureHint" class="map-hint" style="display: none; margin-top: 8px;"></div>
         </div>
@@ -338,6 +356,42 @@
         </div>
     </div>
 </div>
+<!-- Offline Map Manager Modal -->
+<div id="offlineMapsModal" class="overlay" style="display: none; z-index: 132;">
+    <div class="entry-modal-box" style="max-width: 560px;">
+        <h3 style="margin-top: 0;">Offline Map</h3>
+        <p style="margin: 0 0 12px; color: #555; font-size: 0.92em;">Save up to 3 map extents for offline use.</p>
+        <p id="offlineMapsStatus" style="margin: 0 0 12px; font-size: 0.85em; color: #6a2a3f; min-height: 1.2em;"></p>
+        <div id="offlineMapsList" class="offline-map-list"></div>
+        <div class="entry-modal-actions">
+            <button id="saveOfflineExtentBtn" type="button" class="save-btn">Save Current Extent</button>
+            <button id="closeOfflineMapsBtn" type="button" class="cancel-btn">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Offline Choose Saved Map Modal -->
+<div id="offlineChooserModal" class="overlay" style="display: none; z-index: 133;">
+    <div class="entry-modal-box" style="max-width: 520px;">
+        <h3 style="margin-top: 0;">Choose a saved map</h3>
+        <p style="margin: 0 0 12px; color: #555; font-size: 0.92em;">Select one of your saved offline extents to continue.</p>
+        <div id="offlineChooserList" class="offline-map-list"></div>
+        <p id="offlineChooserStatus" style="margin: 12px 0 0; font-size: 0.85em; color: #6a2a3f; min-height: 1.2em;"></p>
+        <div class="entry-modal-actions" style="margin-top: 16px;">
+            <button id="offlineChooserCancelBtn" type="button" class="cancel-btn">Use live map instead</button>
+        </div>
+    </div>
+</div>
+
+<!-- Reconnect Sync Blocker -->
+<div id="offlineSyncBlocker" class="offline-sync-blocker" style="display: none;">
+    <div class="offline-sync-card">
+        <h3>Syncing offline changes...</h3>
+        <p id="offlineSyncStatus">Please wait while your offline entries and stories are synced.</p>
+        <button id="offlineSyncDismissBtn" type="button" class="cancel-btn" style="display:none; margin-top: 14px;">Dismiss</button>
+    </div>
+</div>
+
 <!-- Include ArcGIS API for JavaScript and custom app modules -->
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -350,6 +404,7 @@
 <script src="js/stories.js"></script>
 <script src="js/map.js"></script>
 <script src="js/config.js"></script>
+<script src="js/offline.js"></script>
 <script src="js/supabase.js"></script>
 <script src="js/pdf.js"></script>
 <script src="js/eventHandlers.js"></script>

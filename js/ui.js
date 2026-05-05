@@ -318,9 +318,18 @@ function updateRuntimeCapabilityUI(caps) {
     const offlineBtn = document.getElementById('offlineMapsBtn');
     const exportBtn = document.getElementById('exportPdfBtn');
     const hintEl = document.getElementById('runtimeFeatureHint');
+    const locateBtn = document.getElementById('locateMeBtn');
+    const offlineAllowed = typeof isOfflineFeatureRuntimeAllowed === 'function'
+        ? isOfflineFeatureRuntimeAllowed()
+        : !!(caps && caps.supportsOfflineExtentSave);
+
+    // Hide locate button on Electron desktop — no GPS hardware available
+    if (locateBtn && caps && caps.isElectron) {
+        locateBtn.style.display = 'none';
+    }
 
     if (offlineBtn) {
-        offlineBtn.style.display = caps && caps.supportsOfflineExtentSave ? 'inline-block' : 'none';
+        offlineBtn.style.display = offlineAllowed ? 'inline-block' : 'none';
     }
 
     if (exportBtn) {
@@ -328,7 +337,7 @@ function updateRuntimeCapabilityUI(caps) {
     }
 
     if (hintEl) {
-        if (caps && caps.supportsOfflineExtentSave) {
+        if (offlineAllowed) {
             hintEl.style.display = 'block';
             hintEl.textContent = 'Offline maps are available on this installed app.';
         } else {

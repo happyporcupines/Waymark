@@ -36,10 +36,18 @@ function getStoryEntries(story) {
 }
 
 function getMapStyleForExport() {
-    const cfg = window.WAYMARK_CONFIG || {};
-    const key = cfg.MAPTILER_KEY || '';
-    if (!key) return null;
-    return `https://api.maptiler.com/maps/dataviz/style.json?key=${key}`;
+    return {
+        version: 8,
+        sources: {
+            osm: {
+                type: 'raster',
+                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                tileSize: 256,
+                attribution: '\u00a9 OpenStreetMap contributors'
+            }
+        },
+        layers: [{ id: 'osm-base', type: 'raster', source: 'osm' }]
+    };
 }
 
 function waitForMapIdle(map, timeoutMs = 7000) {
@@ -69,7 +77,6 @@ function getBoundsForCoordinates(coords) {
 async function generateStoryMapImageDataUrl(story) {
     if (!story || typeof maplibregl === 'undefined') return '';
     const styleUrl = getMapStyleForExport();
-    if (!styleUrl) return '';
 
     const entries = getStoryEntries(story);
     if (!entries.length) return '';

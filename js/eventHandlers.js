@@ -118,6 +118,12 @@ document.addEventListener('click', (event) => {
         updateMobileNavState('navProfile');
         return;
     }
+    if (target.closest('#locateMeBtn')) {
+        if (typeof centerMapOnUserLocation === 'function') {
+            centerMapOnUserLocation();
+        }
+        return;
+    }
     // Entry Modal buttons
     if (target.closest('#cancelEntryBtn')) {
         closeEntryModal();
@@ -228,6 +234,10 @@ document.addEventListener('click', (event) => {
     // Share story
     const shareBtn = target.closest('.share-story-btn');
     if (shareBtn) {
+        if (typeof isOfflineAppSession === 'function' && isOfflineAppSession()) {
+            alert('Sharing is disabled while offline.');
+            return;
+        }
         const id = parseInt(shareBtn.getAttribute('data-id'), 10);
         const title = shareBtn.getAttribute('data-title') || '';
         if (typeof openShareModal === 'function') openShareModal(id, title);
@@ -236,6 +246,10 @@ document.addEventListener('click', (event) => {
     // Make public / private toggle
     const makePublicBtn = target.closest('.make-public-btn');
     if (makePublicBtn) {
+        if (typeof isOfflineAppSession === 'function' && isOfflineAppSession()) {
+            alert('Public/private updates are disabled while offline.');
+            return;
+        }
         const id = parseInt(makePublicBtn.getAttribute('data-id'), 10);
         const story = (typeof stories !== 'undefined') && stories.find(s => s.id === id);
         if (story && typeof setStoryPublic === 'function') setStoryPublic(id, !story.isPublic);
@@ -243,16 +257,27 @@ document.addEventListener('click', (event) => {
     }
     // Gallery modal
     if (target.closest('#galleryBtn')) {
+        if (typeof isOfflineAppSession === 'function' && isOfflineAppSession()) {
+            alert('Gallery is disabled while offline.');
+            return;
+        }
         if (typeof openGalleryModal === 'function') openGalleryModal('public');
         return;
     }
     if (target.closest('#offlineMapsBtn')) {
-        const caps = window.WAYMARK_RUNTIME_CAPS || runtimeCapabilities;
-        if (!caps || !caps.supportsOfflineExtentSave) {
-            alert('Offline map extent saving is only available in the desktop app or Play Store installed app.');
+        const offlineAllowed = typeof isOfflineFeatureRuntimeAllowed === 'function'
+            ? isOfflineFeatureRuntimeAllowed()
+            : false;
+        if (!offlineAllowed) {
+            const msg = typeof getOfflineFeatureUnavailableMessage === 'function'
+                ? getOfflineFeatureUnavailableMessage()
+                : 'Offline map features are only available in the Electron app or the Play Store installed app.';
+            alert(msg);
             return;
         }
-        alert('Offline map extent manager is coming next. Runtime checks are now enabled.');
+        if (typeof openOfflineMapsManager === 'function') {
+            openOfflineMapsManager();
+        }
         return;
     }
     if (target.closest('#exportPdfBtn')) {
@@ -278,6 +303,10 @@ document.addEventListener('click', (event) => {
         return;
     }
     if (target.closest('#galleryTabShared')) {
+        if (typeof isOfflineAppSession === 'function' && isOfflineAppSession()) {
+            alert('Shared gallery is disabled while offline.');
+            return;
+        }
         if (typeof openGalleryModal === 'function') openGalleryModal('shared');
         return;
     }

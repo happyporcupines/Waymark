@@ -1,12 +1,12 @@
 /**
  * ============================================================================
- * MAP.JS - Maptiler (Mapbox GL) Map Initialization & Interaction Handlers
+ * MAP.JS - MapLibre GL Map Initialization & Interaction Handlers
  * ============================================================================
  * 
- * This file initializes and configures the Maptiler map, which is
+ * This file initializes and configures the MapLibre GL map using OSM tiles,
  * the core geographic component of Waymark. It handles:
  * 
- * - Loading Maptiler (Mapbox GL) with dataviz style
+ * - Loading MapLibre GL with OSM raster tiles
  * - Creating GeoJSON sources for entries and stories
  * - Setting up click and long-press event handlers
  * - Managing popup interactions
@@ -52,11 +52,9 @@ function getOsmRasterStyle() {
 }
 
 /**
- * Initializes the Maptiler map and sets up all event handlers
- * 
- * Creates a Mapbox GL map instance using Maptiler's dataviz style,
- * adds GeoJSON sources for entries and stories, and sets up interaction handlers.
+ * Initializes the MapLibre GL map and sets up all event handlers
  */
+
 function initMap() {
     console.log('[Waymark] Initializing map...');
     
@@ -66,47 +64,24 @@ function initMap() {
         return;
     }
     
-    const cfg = window.WAYMARK_CONFIG || {};
-    const maptilerKey = cfg.MAPTILER_KEY || '';
-    const electronRuntime = isElectronRuntime();
-    const electronMapStyle = String(cfg.ELECTRON_MAP_STYLE || 'maptiler-only').toLowerCase();
+    const offlineSession = typeof isOfflineAppSession === 'function' && isOfflineAppSession();
 
-    let chosenStyle;
-    let usingMaptiler = false;
-
-    // Electron mode can be configured:
-    // - 'maptiler-only' (default): use MapTiler and do not fallback to OSM
-    // - 'maptiler-first': use MapTiler, fallback to OSM if denied
-    // - 'osm': always use OSM raster
-    if (electronRuntime) {
-        if (electronMapStyle === 'osm' || !maptilerKey) {
-            chosenStyle = getOsmRasterStyle();
-            console.log('[Waymark] Electron runtime using OSM base map style.');
-        } else {
-            usingMaptiler = true;
-            chosenStyle = `https://api.maptiler.com/maps/dataviz/style.json?key=${maptilerKey}`;
-            console.log('[Waymark] Electron runtime using MapTiler style mode:', electronMapStyle);
-        }
-    } else if (maptilerKey) {
-        usingMaptiler = true;
-        chosenStyle = `https://api.maptiler.com/maps/dataviz/style.json?key=${maptilerKey}`;
-        console.log('[Waymark] Browser runtime using MapTiler style.');
-    } else {
-        chosenStyle = getOsmRasterStyle();
-        console.warn('[Waymark] MapTiler key missing; falling back to OSM base map style.');
-    }
+    const chosenStyle = getOsmRasterStyle();
+    console.log('[Waymark] Using OSM base map style.');
     
     try {
-        // CREATE MAP INSTANCE with Maptiler dataviz style
+        // CREATE MAP INSTANCE
         const map = new maplibregl.Map({
             container: 'viewDiv',
             style: chosenStyle,
             center: [-106.644568, 35.126358],  // Default: New Mexico
             zoom: 9,
             pitch: 0,
-            bearing: 0
+            bearing: 0,
+            attributionControl: false
         });
-        let fallbackApplied = false;
+        map.addControl(new maplibregl.AttributionControl({ compact: false }));
+
 
         // Store map globally for use in other modules
         mapInstance = map;
@@ -216,8 +191,15 @@ function initMap() {
             if (typeof updateMapEntryMarkers === 'function') updateMapEntryMarkers();
             if (typeof updateMapStoryLines === 'function') updateMapStoryLines();
 
+            if (typeof getSelectedOfflineExtent === 'function' && typeof applyOfflineExtentToMap === 'function') {
+                const selectedExtent = getSelectedOfflineExtent();
+                if (selectedExtent && offlineSession) {
+                    applyOfflineExtentToMap(selectedExtent);
+                }
+            }
+
             // Attempt to center on user's location
-            if (navigator.geolocation) {
+            if (!offlineSession && navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition((position) => {
                     map.flyTo({
                         center: [position.coords.longitude, position.coords.latitude],
@@ -232,17 +214,6 @@ function initMap() {
         // Error handler for map
         map.on('error', (e) => {
             console.error('[Waymark] Map error:', e.error);
-
-            // Browser fallback if MapTiler key restrictions or quota produce 403.
-            const msg = String(e?.error?.message || '');
-            const status = Number(e?.error?.status || 0);
-            const maptiler403 = status === 403 || (msg.includes('403') && msg.includes('api.maptiler.com'));
-            const allowOsmFallback = !electronRuntime || electronMapStyle === 'maptiler-first';
-            if (usingMaptiler && allowOsmFallback && !fallbackApplied && maptiler403) {
-                fallbackApplied = true;
-                console.warn('[Waymark] MapTiler style denied (403). Falling back to OSM base map style.');
-                map.setStyle(getOsmRasterStyle());
-            }
         });
         
         // ================================================================
@@ -402,6 +373,53 @@ function initMap() {
     } catch (error) {
         console.error('[Waymark] Failed to initialize map:', error);
     }
+}
+
+/**
+ * Pans the map to the user's current location.
+ */
+function centerMapOnUserLocation() {
+    const locateBtn = document.getElementById('locateMeBtn');
+
+    const setLocatingState = (isLocating) => {
+        if (!locateBtn) return;
+        locateBtn.disabled = !!isLocating;
+        locateBtn.classList.toggle('is-locating', !!isLocating);
+        locateBtn.setAttribute('aria-busy', isLocating ? 'true' : 'false');
+    };
+
+    if (!mapInstance || !mapLoaded) {
+        alert('Map is still loading. Please try again in a moment.');
+        return;
+    }
+
+    if (typeof isOfflineAppSession === 'function' && isOfflineAppSession()) {
+        alert('GPS is disabled while offline.');
+        return;
+    }
+
+    if (!navigator.geolocation) {
+        alert('Geolocation is not supported on this device.');
+        return;
+    }
+
+    setLocatingState(true);
+
+    navigator.geolocation.getCurrentPosition((position) => {
+        mapInstance.flyTo({
+            center: [position.coords.longitude, position.coords.latitude],
+            zoom: Math.max(mapInstance.getZoom(), 13),
+            duration: 900
+        });
+        setLocatingState(false);
+    }, () => {
+        setLocatingState(false);
+        alert('Location is not available on this device.');
+    }, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000
+    });
 }
 
 /**
@@ -650,3 +668,146 @@ function updateMapStoryLines() {
             mapInstance.setLayoutProperty('story-lines-layer', 'visibility', 'visible');
         }
     }
+
+// ============================================================================
+// LOCATION SEARCH (Nominatim / OSM geocoding)
+// ============================================================================
+
+function initLocationSearch() {
+    const container = document.getElementById('locationSearch');
+    const input = document.getElementById('locationSearchInput');
+    const clearBtn = document.getElementById('locationSearchClear');
+    const resultsList = document.getElementById('locationSearchResults');
+
+    if (!container || !input || !resultsList) return;
+
+    let debounceTimer = null;
+    let activeIndex = -1;
+    let lastResults = [];
+
+    function closeResults() {
+        resultsList.hidden = true;
+        resultsList.innerHTML = '';
+        activeIndex = -1;
+        lastResults = [];
+    }
+
+    function renderResults(results) {
+        resultsList.innerHTML = '';
+        activeIndex = -1;
+        lastResults = results;
+
+        if (!results.length) {
+            resultsList.innerHTML = '<li class="location-search-empty">No results found</li>';
+            resultsList.hidden = false;
+            return;
+        }
+
+        results.forEach((item) => {
+            const li = document.createElement('li');
+            li.textContent = item.display_name;
+            li.setAttribute('role', 'option');
+            li.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                selectResult(item);
+            });
+            resultsList.appendChild(li);
+        });
+
+        resultsList.hidden = false;
+    }
+
+    function selectResult(item) {
+        input.value = item.display_name;
+        clearBtn.hidden = false;
+        closeResults();
+
+        if (!mapInstance) return;
+        const lon = parseFloat(item.lon);
+        const lat = parseFloat(item.lat);
+        if (!isFinite(lon) || !isFinite(lat)) return;
+
+        if (item.boundingbox && item.boundingbox.length === 4) {
+            const [minLat, maxLat, minLon, maxLon] = item.boundingbox.map(parseFloat);
+            mapInstance.fitBounds([[minLon, minLat], [maxLon, maxLat]], { padding: 60, maxZoom: 16, duration: 900 });
+        } else {
+            mapInstance.flyTo({ center: [lon, lat], zoom: 13, duration: 900 });
+        }
+    }
+
+    function setActiveItem(index) {
+        const items = resultsList.querySelectorAll('li[role="option"]');
+        items.forEach((el, i) => el.setAttribute('aria-selected', i === index ? 'true' : 'false'));
+        activeIndex = index;
+    }
+
+    async function doSearch(q) {
+        q = q.trim();
+        if (!q) { closeResults(); return; }
+
+        resultsList.innerHTML = '<li class="location-search-loading">Searching...</li>';
+        resultsList.hidden = false;
+
+        try {
+            const url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&format=json&limit=5&addressdetails=0&email=happyporcupines%40users.noreply.github.com';
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error('Nominatim error ' + resp.status);
+            const data = await resp.json();
+            renderResults(data);
+        } catch (err) {
+            resultsList.innerHTML = '<li class="location-search-empty">Search unavailable - check your connection</li>';
+            resultsList.hidden = false;
+            console.warn('[Waymark] Geocoding failed:', err);
+        }
+    }
+
+    input.addEventListener('input', () => {
+        const val = input.value;
+        clearBtn.hidden = !val;
+        clearTimeout(debounceTimer);
+        if (!val.trim()) { closeResults(); return; }
+        debounceTimer = setTimeout(() => doSearch(val), 450);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        const items = resultsList.querySelectorAll('li[role="option"]');
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const next = Math.min(activeIndex + 1, items.length - 1);
+            setActiveItem(next);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prev = Math.max(activeIndex - 1, 0);
+            setActiveItem(prev);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeIndex >= 0 && lastResults[activeIndex]) {
+                selectResult(lastResults[activeIndex]);
+            } else if (lastResults.length) {
+                selectResult(lastResults[0]);
+            } else {
+                doSearch(input.value);
+            }
+        } else if (e.key === 'Escape') {
+            closeResults();
+            input.blur();
+        }
+    });
+
+    clearBtn.addEventListener('click', () => {
+        input.value = '';
+        clearBtn.hidden = true;
+        closeResults();
+        input.focus();
+    });
+
+    document.addEventListener('mousedown', (e) => {
+        if (!container.contains(e.target)) closeResults();
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initLocationSearch);
+} else {
+    initLocationSearch();
+}

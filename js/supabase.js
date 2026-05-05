@@ -20,6 +20,58 @@ let initialUserDataHydrated = false;
 let isEnteringApp = false;
 
 const REMOTE_SYNC_DEBOUNCE_MS = 1200;
+const AUTH_BOOTSTRAP_USER_KEY = 'waymark_auth_bootstrap_user_v1';
+
+function persistAuthBootstrapUser(user) {
+    if (!user || !user.id) return;
+    try {
+        const payload = {
+            id: user.id,
+            email: user.email || '',
+            user_metadata: user.user_metadata || {}
+        };
+        localStorage.setItem(AUTH_BOOTSTRAP_USER_KEY, JSON.stringify(payload));
+    } catch (_) {
+        // Ignore storage failures.
+    }
+}
+
+function readAuthBootstrapUser() {
+    try {
+        const raw = localStorage.getItem(AUTH_BOOTSTRAP_USER_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.id) return null;
+        return parsed;
+    } catch (_) {
+        return null;
+    }
+}
+
+function clearAuthBootstrapUser() {
+    try {
+        localStorage.removeItem(AUTH_BOOTSTRAP_USER_KEY);
+    } catch (_) {
+        // Ignore storage failures.
+    }
+}
+
+function dispatchSyncStateEvent(state, success) {
+    try {
+        window.dispatchEvent(new CustomEvent('waymark-sync-state', {
+            detail: {
+                state,
+                success: success !== false
+            }
+        }));
+    } catch (error) {
+        // Ignore event dispatch errors.
+    }
+}
+
+function shouldTrackOfflineProjectDirty() {
+    return typeof isOfflineFeatureRuntimeAllowed === 'function' && isOfflineFeatureRuntimeAllowed();
+}
 
 function isElectronRuntime() {
     const ua = navigator.userAgent || '';
@@ -33,6 +85,33 @@ function withTimeout(promise, timeoutMs, label) {
             setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
         })
     ]);
+}
+
+/**
+ * Returns true only when Supabase is actually reachable.
+ *
+ * On Electron (and sometimes on Android TWAs) navigator.onLine can be true
+ * even when there is no internet. We probe the Supabase health endpoint with
+ * a short timeout so we never block the UI and never attempt a doomed sync.
+ */
+async function canReachSupabase() {
+    if (navigator.onLine === false) return false;
+    const cfg = window.WAYMARK_CONFIG || {};
+    const supabaseUrl = cfg.SUPABASE_URL || '';
+    if (!supabaseUrl) return false;
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 4000);
+        const resp = await fetch(`${supabaseUrl}/rest/v1/`, {
+            method: 'HEAD',
+            signal: controller.signal,
+            cache: 'no-store'
+        });
+        clearTimeout(timer);
+        return resp.ok || resp.status === 401; // 401 = reachable but needs auth key
+    } catch (_) {
+        return false;
+    }
 }
 
 function getAuthRedirectUrl() {
@@ -630,8 +709,114 @@ async function loadSupabaseDataForCurrentUser() {
     }
 
     updateSidebarList();
+
+    // Persist to local cache so data survives offline restarts.
+    if (authenticatedUser) {
+        saveLocalDataCache(authenticatedUser.id);
+    }
+
     isHydratingRemoteData = false;
     return true;
+}
+
+// ============================================================================
+// LOCAL DATA CACHE (offline persistence across restarts)
+// ============================================================================
+
+const LOCAL_CACHE_VERSION = 1;
+
+function getLocalCacheKey(userId) {
+    return `waymark_cache_v${LOCAL_CACHE_VERSION}_${userId}`;
+}
+
+function saveLocalDataCache(userId) {
+    if (!userId) return;
+    try {
+        const payload = {
+            entries: serializeEntriesForSync(userId),
+            stories: serializeStoriesForSync(userId),
+            savedAt: Date.now()
+        };
+        localStorage.setItem(getLocalCacheKey(userId), JSON.stringify(payload));
+        console.log('[Waymark] Local data cache saved:', payload.entries.length, 'entries,', payload.stories.length, 'stories');
+    } catch (e) {
+        console.warn('[Waymark] Could not save local cache:', e);
+    }
+}
+
+function loadLocalDataCache(userId) {
+    if (!userId) return false;
+    try {
+        const raw = localStorage.getItem(getLocalCacheKey(userId));
+        if (!raw) return false;
+        const payload = JSON.parse(raw);
+        if (!payload || !Array.isArray(payload.entries)) return false;
+
+        clearLocalDataState();
+
+        let maxEntryId = 0;
+        (payload.entries || []).forEach((row) => {
+            const lat = toNumber(row.lat);
+            const lon = toNumber(row.lon);
+            const pointKey = row.point_key || buildPointKey(lat, lon);
+
+            if (!pointStore.has(pointKey)) {
+                pointStore.set(pointKey, {
+                    pointKey, lat, lon,
+                    mapPoint: buildPointGeometry(lat, lon),
+                    entries: [], graphic: null
+                });
+            }
+
+            const pointRecord = pointStore.get(pointKey);
+            const entryId = toNumber(row.entry_id, nextEntryId);
+            maxEntryId = Math.max(maxEntryId, entryId);
+
+            const textHtml = row.text_html || '';
+            const textPlain = row.text_plain || (typeof htmlToText === 'function' ? htmlToText(textHtml) : textHtml);
+            const createdAt = toNumber(row.created_at_ms, Date.now());
+
+            const entryObject = { id: entryId, title: row.title || 'Untitled Entry', textHtml, textPlain, createdAt, image: row.image || null };
+            pointRecord.entries.push(entryObject);
+            journalEntries.push({ id: entryId, title: entryObject.title, text: textPlain, lat, lon, image: entryObject.image, createdAt });
+        });
+
+        nextEntryId = Math.max(maxEntryId + 1, 1);
+
+        let maxStoryId = 0;
+        (payload.stories || []).forEach((row) => {
+            const storyId = toNumber(row.story_id, nextStoryId);
+            maxStoryId = Math.max(maxStoryId, storyId);
+
+            let rawEntryIds = row.entry_ids;
+            if (typeof rawEntryIds === 'string') {
+                try { rawEntryIds = JSON.parse(rawEntryIds); } catch (e) { rawEntryIds = []; }
+            }
+            const storyEntryIds = Array.isArray(rawEntryIds)
+                ? rawEntryIds.map((item) => toNumber(item)).filter((item) => Number.isFinite(item))
+                : [];
+
+            stories.push({
+                id: storyId,
+                title: row.title || 'Untitled Story',
+                description: row.description || '',
+                entryIds: storyEntryIds,
+                visible: row.visible !== false,
+                isPublic: row.is_public || false,
+                totalMiles: toNumber(row.total_miles, 0),
+                lineColor: row.line_color || '#a43855',
+                centerLat: row.center_lat || null,
+                centerLon: row.center_lon || null
+            });
+        });
+
+        nextStoryId = Math.max(maxStoryId + 1, 1);
+        console.log('[Waymark] Restored from local cache:', journalEntries.length, 'entries,', stories.length, 'stories');
+        return true;
+    } catch (e) {
+        console.warn('[Waymark] Could not load local cache:', e);
+        return false;
+    }
 }
 
 function serializeEntriesForSync(userId) {
@@ -679,6 +864,16 @@ async function pushLocalDataToSupabase() {
         return;
     }
 
+    if (navigator.onLine === false) {
+        if (shouldTrackOfflineProjectDirty() && typeof markOfflineProjectDirty === 'function') {
+            markOfflineProjectDirty();
+        }
+        if (authenticatedUser) {
+            saveLocalDataCache(authenticatedUser.id);
+        }
+        return;
+    }
+
     const client = getSupabaseClient();
     if (!client || !authenticatedUser || isGuestMode || isHydratingRemoteData) {
         return;
@@ -692,6 +887,7 @@ async function pushLocalDataToSupabase() {
 
     syncInFlight = true;
     syncQueuedDuringFlight = false;
+    dispatchSyncStateEvent('running', true);
 
     try {
         const entryPayload = serializeEntriesForSync(authenticatedUser.id);
@@ -734,9 +930,22 @@ async function pushLocalDataToSupabase() {
         }
 
         setAuthStatus('Saved to Supabase.');
+        if (shouldTrackOfflineProjectDirty() && typeof clearOfflineProjectDirtyFlag === 'function') {
+            clearOfflineProjectDirtyFlag();
+        }
+        // Update local cache after successful remote push.
+        if (authenticatedUser) {
+            saveLocalDataCache(authenticatedUser.id);
+        }
+        dispatchSyncStateEvent('idle', true);
     } catch (error) {
         console.error(error);
+        // Save cache on sync failure so entries survive a restart even without internet.
+        if (authenticatedUser) {
+            saveLocalDataCache(authenticatedUser.id);
+        }
         setAuthStatus('Sync failed. Your local changes are still in this session.', true);
+        dispatchSyncStateEvent('idle', false);
     } finally {
         syncInFlight = false;
         if (syncQueuedDuringFlight) {
@@ -752,12 +961,47 @@ function queueSupabaseSync() {
     if (!initialUserDataHydrated) {
         return;
     }
+    // Always persist locally first — covers offline, no-internet, and sync-failure cases.
+    saveLocalDataCache(authenticatedUser.id);
     if (syncTimer) {
         clearTimeout(syncTimer);
     }
-    syncTimer = setTimeout(() => {
+    // Probe actual reachability before scheduling a remote push. On Electron
+    // (and some TWA builds) navigator.onLine is always true even without internet,
+    // so we do a real network check inside the debounce window.
+    syncTimer = setTimeout(async () => {
+        const online = await canReachSupabase();
+        if (!online) {
+            if (shouldTrackOfflineProjectDirty() && typeof markOfflineProjectDirty === 'function') {
+                markOfflineProjectDirty();
+            }
+            setAuthStatus('Offline: changes saved locally and will sync when online.');
+            return;
+        }
         pushLocalDataToSupabase();
     }, REMOTE_SYNC_DEBOUNCE_MS);
+}
+
+async function flushSupabaseSyncNow() {
+    if (!authenticatedUser || isGuestMode || isHydratingRemoteData) {
+        return false;
+    }
+    if (!initialUserDataHydrated) {
+        return false;
+    }
+    const online = await canReachSupabase();
+    if (!online) {
+        if (shouldTrackOfflineProjectDirty() && typeof markOfflineProjectDirty === 'function') {
+            markOfflineProjectDirty();
+        }
+        return false;
+    }
+    if (syncTimer) {
+        clearTimeout(syncTimer);
+        syncTimer = null;
+    }
+    await pushLocalDataToSupabase();
+    return true;
 }
 
 async function enterAuthenticatedApp(user) {
@@ -782,9 +1026,57 @@ async function enterAuthenticatedApp(user) {
 
         if (shouldLoadRemoteData) {
             initialUserDataHydrated = false;
-            const didLoadRemoteData = await loadSupabaseDataForCurrentUser();
-            loadedUserId = didLoadRemoteData ? user.id : null;
-            initialUserDataHydrated = !!didLoadRemoteData;
+
+            // If there are unsynced offline changes, load from local cache first so
+            // those entries are in memory when we push to the server. Loading from
+            // the server first would overwrite memory and lose the offline work.
+            const hasDirtyOfflineData = typeof hasOfflineProjectDirtyFlag === 'function' && hasOfflineProjectDirtyFlag();
+            if (hasDirtyOfflineData) {
+                const restoredFromCache = loadLocalDataCache(user.id);
+                if (restoredFromCache) {
+                    loadedUserId = user.id;
+                    initialUserDataHydrated = true;
+                    if (typeof updateMapEntryMarkers === 'function') updateMapEntryMarkers();
+                    if (typeof updateMapStoryLines === 'function') updateMapStoryLines();
+                    updateSidebarList();
+                    setAuthStatus('Syncing offline changes...');
+
+                    // We are now hydrated with the offline cache for this user.
+                    // Kick an immediate reconnect sync attempt so the user sees
+                    // progress on app open without needing extra interaction.
+                    if (typeof runReconnectSyncFlow === 'function') {
+                        setTimeout(() => {
+                            runReconnectSyncFlow();
+                        }, 0);
+                    }
+                }
+            }
+
+            // Only fetch from server if we didn't already restore from local cache above.
+            if (!initialUserDataHydrated) {
+                const didLoadRemoteData = await loadSupabaseDataForCurrentUser();
+                if (didLoadRemoteData) {
+                    loadedUserId = user.id;
+                    initialUserDataHydrated = true;
+                } else {
+                    // Remote load failed (offline or network error). Try restoring from local cache.
+                    const restoredFromCache = loadLocalDataCache(user.id);
+                    if (restoredFromCache) {
+                        loadedUserId = user.id;
+                        initialUserDataHydrated = true;
+                        if (typeof updateMapEntryMarkers === 'function') updateMapEntryMarkers();
+                        if (typeof updateMapStoryLines === 'function') updateMapStoryLines();
+                        updateSidebarList();
+                        setAuthStatus('Offline: showing your last saved data. Changes will sync when online.');
+                        if (shouldTrackOfflineProjectDirty() && typeof markOfflineProjectDirty === 'function') {
+                            markOfflineProjectDirty();
+                        }
+                    } else {
+                        loadedUserId = null;
+                        initialUserDataHydrated = false;
+                    }
+                }
+            }
         } else if (loadedUserId === user.id) {
             initialUserDataHydrated = true;
         }
@@ -926,19 +1218,28 @@ function initializeSupabaseAuth() {
         return;
     }
 
-    function applySignedOutState() {
+    function applySignedOutState(statusMessage, isError) {
         authenticatedUser = null;
         loadedUserId = null;
         initialUserDataHydrated = false;
+        clearAuthBootstrapUser();
         updateAuthUi();
         showLoginScreen();
+        if (statusMessage) {
+            setAuthStatus(statusMessage, isError === true);
+        }
     }
 
     // On page load, onAuthStateChange fires SIGNED_IN from localStorage before getSession()
     // resolves. Starting a data fetch there races with getSession()'s internal token-refresh
     // lock and causes the fetch to hang. We use this flag to skip SIGNED_IN on initial load
     // and let getSession() be the sole bootstrap trigger.
+    //
+    // However, when offline the token refresh inside getSession() will hang and eventually
+    // time out. In that case we fall back to the user from the cached SIGNED_IN event so
+    // the user can still access their locally-saved entries.
     let initialLoadComplete = false;
+    let bootstrapFallbackUser = null;
 
     client.auth.onAuthStateChange(async (event, session) => {
         console.log('[Waymark] Auth state changed:', event, session ? 'logged in' : 'logged out');
@@ -958,6 +1259,7 @@ function initializeSupabaseAuth() {
         if (session && session.user && (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
             console.log('[Waymark] Token/user update for:', session.user.email);
             authenticatedUser = session.user;
+            persistAuthBootstrapUser(session.user);
             updateAuthUi();
             return;
         }
@@ -967,9 +1269,13 @@ function initializeSupabaseAuth() {
         if (session && session.user && event === 'SIGNED_IN') {
             if (!initialLoadComplete) {
                 console.log('[Waymark] SIGNED_IN on initial load — deferring to getSession()');
+                // Save the user in case getSession() times out (e.g. offline token refresh).
+                bootstrapFallbackUser = session.user;
+                persistAuthBootstrapUser(session.user);
                 return;
             }
             console.log('[Waymark] SIGNED_IN (post-load) for:', session.user.email);
+            persistAuthBootstrapUser(session.user);
             await enterAuthenticatedApp(session.user);
             return;
         }
@@ -977,24 +1283,46 @@ function initializeSupabaseAuth() {
         console.log('[Waymark] Ignoring auth event:', event);
     });
 
-    // Sole bootstrap trigger on page load. Resolves only after token refresh is complete,
-    // so any data fetch started here won't race with the internal lock.
-    client.auth.getSession()
+    // Sole bootstrap trigger on page load. Wrapped in a timeout so a hung token
+    // refresh (e.g. going offline) never freezes the app past 8 seconds.
+    withTimeout(client.auth.getSession(), 8000, 'getSession')
         .then(async (result = {}) => {
             initialLoadComplete = true;
             const { data } = result;
             if (data && data.session && data.session.user) {
                 console.log('[Waymark] getSession: restoring session for', data.session.user.email);
+                persistAuthBootstrapUser(data.session.user);
                 await enterAuthenticatedApp(data.session.user);
                 return;
             }
+            // No active session — but check if we had a cached SIGNED_IN event.
+            const cachedUser = bootstrapFallbackUser || readAuthBootstrapUser();
+            if (cachedUser) {
+                console.log('[Waymark] getSession: no session but restoring from cached auth bootstrap for', cachedUser.email || cachedUser.id);
+                setAuthStatus('Offline: restoring your saved session...');
+                await enterAuthenticatedApp(cachedUser);
+                return;
+            }
             console.log('[Waymark] getSession: no session found');
+            if (navigator.onLine === false) {
+                applySignedOutState('Offline and no saved login found. Connect online once and sign in.', true);
+                return;
+            }
             applySignedOutState();
         })
-        .catch(err => {
+        .catch(async (err) => {
             initialLoadComplete = true;
             console.error('[Waymark] Error checking stored session:', err);
-            applySignedOutState();
+            // Timeout or network error. Use the cached SIGNED_IN user so the user
+            // can access their locally-saved entries while offline.
+            const cachedUser = bootstrapFallbackUser || readAuthBootstrapUser();
+            if (cachedUser) {
+                console.log('[Waymark] getSession timed out — restoring offline session for', cachedUser.email || cachedUser.id);
+                setAuthStatus('Offline: restoring your saved session...');
+                await enterAuthenticatedApp(cachedUser);
+                return;
+            }
+            applySignedOutState('Offline and no saved login found. Connect online once and sign in.', true);
         });
 }
 

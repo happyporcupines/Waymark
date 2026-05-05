@@ -182,8 +182,17 @@ function upsertGuestArrayEntry(entry, pointRecord) {
  * // - #entryDate
  */
 function saveEntry() {
-    // Validate we have a valid point to save to
-    if (!currentPointKey || !pointStore.has(currentPointKey)) {
+    // Validate we have a valid point to save to.
+    // If the point was evicted from pointStore by a concurrent clearLocalDataState()
+    // (race between the user long-pressing and the offline cache being loaded),
+    // re-create it from currentClickCoords so the save can proceed.
+    if (!currentPointKey) {
+        return;
+    }
+    if (!pointStore.has(currentPointKey) && currentClickCoords) {
+        getOrCreatePointRecord(currentClickCoords);
+    }
+    if (!pointStore.has(currentPointKey)) {
         return;
     }
     
@@ -201,39 +210,50 @@ function saveEntry() {
         return;
     }
     
-    // UPDATE EXISTING ENTRY
-    if (currentEditingEntryId) {
-        const editingEntry = pointRecord.entries.find((entry) => entry.id === currentEditingEntryId);
-        if (editingEntry) {
-            editingEntry.title = title;
-            editingEntry.textHtml = textHtml;
-            editingEntry.textPlain = textPlain;
-            editingEntry.createdAt = createdAt;
-            editingEntry.image = currentEntryImage;
-            upsertGuestArrayEntry(editingEntry, pointRecord);
+    try {
+        // UPDATE EXISTING ENTRY
+        if (currentEditingEntryId) {
+            const editingEntry = pointRecord.entries.find((entry) => entry.id === currentEditingEntryId);
+            if (editingEntry) {
+                editingEntry.title = title;
+                editingEntry.textHtml = textHtml;
+                editingEntry.textPlain = textPlain;
+                editingEntry.createdAt = createdAt;
+                editingEntry.image = currentEntryImage;
+                upsertGuestArrayEntry(editingEntry, pointRecord);
+            }
+        } 
+        // CREATE NEW ENTRY
+        else {
+            const newEntry = {
+                id: nextEntryId++,           // Generate unique ID and increment counter
+                title,
+                textHtml,                     // Rich HTML content for display
+                textPlain,                    // Plain text for previews and search
+                createdAt: createdAt,
+                image: currentEntryImage      // Base64 data URL or null
+            };
+            pointRecord.entries.push(newEntry);
+            upsertGuestArrayEntry(newEntry, pointRecord);
         }
-    } 
-    // CREATE NEW ENTRY
-    else {
-        const newEntry = {
-            id: nextEntryId++,           // Generate unique ID and increment counter
-            title,
-            textHtml,                     // Rich HTML content for display
-            textPlain,                    // Plain text for previews and search
-            createdAt: createdAt,
-            image: currentEntryImage      // Base64 data URL or null
-        };
-        pointRecord.entries.push(newEntry);
-        upsertGuestArrayEntry(newEntry, pointRecord);
+
+        // Persist locally immediately — independent of sync guards so entries are
+        // never lost when offline (even before initial hydration completes).
+        if (!isGuestMode && authenticatedUser && typeof saveLocalDataCache === 'function') {
+            saveLocalDataCache(authenticatedUser.id);
+        }
+
+        // Update UI to reflect the changes
+        updatePointGraphic(pointRecord);  // Refresh map marker
+        updateSidebarList();               // Refresh entry list
+        if (typeof queueSupabaseSync === 'function') {
+            queueSupabaseSync();
+        }
+    } catch (err) {
+        console.error('[Waymark] saveEntry error:', err);
+    } finally {
+        closeEntryModal();                 // Always close modal, even on error
     }
-    
-    // Update UI to reflect the changes
-    updatePointGraphic(pointRecord);  // Refresh map marker
-    updateSidebarList();               // Refresh entry list
-    if (typeof queueSupabaseSync === 'function') {
-        queueSupabaseSync();
-    }
-    closeEntryModal();                 // Close modal and reset state
 }
 
 // ============================================================================

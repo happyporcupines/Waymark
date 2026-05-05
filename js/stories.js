@@ -108,6 +108,7 @@ function hexToRgba(hex, alpha = 0.95) {
  */
 
 function openStoriesModal() {
+    const offlineSession = typeof isOfflineAppSession === 'function' && isOfflineAppSession();
     const listContainer = document.getElementById('storiesList');
     listContainer.innerHTML = '';
     
@@ -158,12 +159,17 @@ function openStoriesModal() {
             buttonsDiv.style.display = 'flex';
             buttonsDiv.style.gap = '4px';
             buttonsDiv.style.flexWrap = 'wrap';
-            buttonsDiv.innerHTML = `
+            let buttonHtml = `
                 <button class="story-btn-small toggle-story-vis-btn" data-id="${story.id}">${story.visible ? '👁️ Hide' : '👁️‍🗨️ Show'}</button>
                 <button class="story-btn-small edit-story-btn" data-id="${story.id}">Edit</button>
-                <button class="story-btn-small share-story-btn" data-id="${story.id}" data-title="${escapeHtml(story.title)}">Share</button>
-                <button class="story-btn-small make-public-btn" data-id="${story.id}">${story.isPublic ? '🌍 Public' : '🔒 Private'}</button>
             `;
+            if (!offlineSession) {
+                buttonHtml += `
+                    <button class="story-btn-small share-story-btn" data-id="${story.id}" data-title="${escapeHtml(story.title)}">Share</button>
+                    <button class="story-btn-small make-public-btn" data-id="${story.id}">${story.isPublic ? '🌍 Public' : '🔒 Private'}</button>
+                `;
+            }
+            buttonsDiv.innerHTML = buttonHtml;
             
             // ASSEMBLE LIST ITEM: Add content and buttons to the container
             div.appendChild(contentDiv);
@@ -714,6 +720,10 @@ function renderGalleryMessage(message, tone) {
 }
 
 async function openGalleryModal(tab) {
+    if (typeof isOfflineAppSession === 'function' && isOfflineAppSession()) {
+        alert('Gallery is disabled while offline.');
+        return;
+    }
     _galleryTab = tab || 'public';
     _galleryOffset = 0;
     const modal = document.getElementById('galleryModal');
@@ -783,12 +793,7 @@ async function loadGalleryPage(reset) {
         card.className = 'gallery-card';
         const hasCoords = s.center_lat != null && s.center_lon != null;
         let thumbHtml;
-        if (hasCoords && window.WAYMARK_CONFIG && window.WAYMARK_CONFIG.MAPTILER_KEY) {
-            const imgSrc = `https://api.maptiler.com/maps/dataviz/static/${s.center_lon},${s.center_lat},5/400x160.png?key=${window.WAYMARK_CONFIG.MAPTILER_KEY}`;
-            thumbHtml = `<img class="gallery-card-thumb" src="${imgSrc}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="gallery-card-thumb-placeholder" style="display:none;">🗺️</div>`;
-        } else {
-            thumbHtml = `<div class="gallery-card-thumb-placeholder">🗺️</div>`;
-        }
+        thumbHtml = `<div class="gallery-card-thumb-placeholder">🗺️</div>`;
         card.innerHTML = `
             ${thumbHtml}
             <div class="gallery-card-body">

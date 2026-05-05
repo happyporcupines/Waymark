@@ -1,4 +1,5 @@
-const CACHE_NAME = 'waymark-v24';
+const CACHE_NAME = 'waymark-v26';
+const TILE_CACHE_NAME = 'waymark-offline-tiles-v1';
 const APP_SHELL_FILES = [
     './',
     './index.html',
@@ -11,6 +12,7 @@ const APP_SHELL_FILES = [
     './js/stories.js',
     './js/map.js',
     './js/config.js',
+    './js/offline.js',
     './js/supabase.js',
     './js/pdf.js',
     './js/eventHandlers.js',
@@ -50,25 +52,54 @@ self.addEventListener('fetch', (event) => {
 
     const requestUrl = new URL(event.request.url);
 
-    // Only serve app shell files from cache. Everything else (APIs, CDNs, tiles) goes to network.
+    const isTileRequest =
+        requestUrl.hostname === 'tile.openstreetmap.org';
+
+    // Cache-first for map tiles so saved extents continue to render offline.
+    if (isTileRequest) {
+        event.respondWith(
+            caches.open(TILE_CACHE_NAME).then((cache) => {
+                return cache.match(event.request).then((cached) => {
+                    if (cached) {
+                        return cached;
+                    }
+                    return fetch(event.request).then((networkResponse) => {
+                        if (networkResponse) {
+                            cache.put(event.request, networkResponse.clone());
+                        }
+                        return networkResponse;
+                    });
+                });
+            }).catch(() => fetch(event.request))
+        );
+        return;
+    }
+
+    // Only serve app shell files from cache for same-origin requests.
     if (requestUrl.origin !== self.location.origin) {
         return;
     }
 
+    // Cache-first for app shell — loads instantly offline.
     event.respondWith(
-        fetch(event.request)
-            .then((networkResponse) => {
-                if (!networkResponse || networkResponse.status !== 200) {
-                    return networkResponse;
+        caches.match(event.request).then((cached) => {
+            if (cached) {
+                // Serve from cache immediately, refresh in background.
+                fetch(event.request).then((networkResponse) => {
+                    if (networkResponse && networkResponse.status === 200) {
+                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
+                    }
+                }).catch(() => {});
+                return cached;
+            }
+            // Not in cache yet — try network.
+            return fetch(event.request).then((networkResponse) => {
+                if (networkResponse && networkResponse.status === 200) {
+                    const clone = networkResponse.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
                 }
-
-                const responseClone = networkResponse.clone();
-                caches.open(CACHE_NAME).then((cache) => {
-                    cache.put(event.request, responseClone);
-                });
-
                 return networkResponse;
-            })
-            .catch(() => caches.match(event.request))
+            });
+        })
     );
 });
