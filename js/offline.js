@@ -61,9 +61,11 @@ function getSelectedOfflineExtentId() {
 function setSelectedOfflineExtentId(extentId) {
     if (!extentId) {
         localStorage.removeItem(getOfflineSelectedStorageKey());
+        updateExitOfflineMapBtn(false);
         return;
     }
     localStorage.setItem(getOfflineSelectedStorageKey(), extentId);
+    updateExitOfflineMapBtn(true);
 }
 
 function getSelectedOfflineExtent() {
@@ -337,6 +339,13 @@ function clearOfflineMapBounds() {
         }
     } catch (error) {
         // Ignore reset failures.
+    }
+}
+
+function updateExitOfflineMapBtn(visible) {
+    const btn = document.getElementById('exitOfflineMapBtn');
+    if (btn) {
+        btn.style.display = visible ? 'inline-block' : 'none';
     }
 }
 
@@ -646,6 +655,16 @@ function initializeOfflineMapFeature() {
             closeOfflineChooserModal();
             clearOfflineMapBounds();
         });
+    }
+
+    const exitOfflineMapBtn = document.getElementById('exitOfflineMapBtn');
+    if (exitOfflineMapBtn) {
+        exitOfflineMapBtn.addEventListener('click', () => {
+            setSelectedOfflineExtentId('');
+            clearOfflineMapBounds();
+        });
+        // Sync on load — show if an extent was already selected from a previous session
+        updateExitOfflineMapBtn(!!getSelectedOfflineExtentId());
     }
 
     window.addEventListener('online', handleConnectivityChange);
