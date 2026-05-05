@@ -396,8 +396,9 @@ async function buildPdfContent(scope, storyId, pageSize, landscape) {
 
         // Filter entries to those with GPS coords within the extent bounds
         let entriesToPrint = journalEntries || [];
-        if (extent && extent.bounds) {
-            const b = extent.bounds;
+        const allCount = entriesToPrint.length;
+        const b = (extent && extent.bounds) ? extent.bounds : null;
+        if (b) {
             entriesToPrint = entriesToPrint.filter((e) => {
                 const lat = Number(e.lat);
                 const lon = Number(e.lon);
@@ -406,6 +407,18 @@ async function buildPdfContent(scope, storyId, pageSize, landscape) {
                     lon >= b.west && lon <= b.east;
             });
         }
+        const filteredCount = entriesToPrint.length;
+
+        // Debug info — remove once filtering is confirmed working
+        const debugInfo = b
+            ? `<p style="font-size:0.75em;color:#888;background:#f5f5f5;padding:6px 10px;border-radius:4px;margin-bottom:1em;">
+                 Debug — Extent bounds: W=${b.west?.toFixed(4)}, E=${b.east?.toFixed(4)}, S=${b.south?.toFixed(4)}, N=${b.north?.toFixed(4)} &nbsp;|&nbsp;
+                 Entries: ${filteredCount} of ${allCount} within bounds
+               </p>`
+            : `<p style="font-size:0.75em;color:#c00;background:#fff0f0;padding:6px 10px;border-radius:4px;margin-bottom:1em;">
+                 Debug — extent.bounds is missing! extent=${JSON.stringify(extent)}
+               </p>`;
+
         const rows = _renderEntryRows(entriesToPrint);
 
         let mapSection = '';
@@ -419,10 +432,7 @@ async function buildPdfContent(scope, storyId, pageSize, landscape) {
                     </section>`;
             }
         }
-        return _buildHtml(heading, pageSize, landscape, mapSection, rows);
-    }
-
-    return _buildHtml('Waymark', pageSize, landscape, '', '');
+        return _buildHtml(heading, pageSize, landscape, debugInfo + mapSection, rows);
 }
 
 async function performPdfExport() {
