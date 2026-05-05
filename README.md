@@ -11,9 +11,6 @@ This project is now prepared for:
 ## Download Waymark (Desktop)
 
 Download the latest Electron desktop builds from GitHub Releases:
-
-- Windows (.exe): https://github.com/happyporcupines/Waymark/releases
-- macOS (.dmg/.zip): https://github.com/happyporcupines/Waymark/releases
 - Linux (.AppImage): https://github.com/happyporcupines/Waymark/releases
 
 Direct latest release page:
