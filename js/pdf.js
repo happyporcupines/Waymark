@@ -218,8 +218,8 @@ function _storyCoordsWithLocation(story) {
         .map((e) => [Number(e.lon), Number(e.lat)]);
 }
 
-/** Render a map showing an offline extent bounding box — no route line. */
-async function _renderOfflineExtentMap(extent) {
+/** Render a map showing an offline extent bounding box with entry point markers. */
+async function _renderOfflineExtentMap(extent, entriesInExtent) {
     if (!extent || !extent.bounds) return '';
     const b = extent.bounds; // { north, south, east, west }
     const TILE_SIZE = 256;
@@ -281,12 +281,33 @@ async function _renderOfflineExtentMap(extent) {
     // Draw extent rectangle (fill + outline)
     const [rx1, ry1] = toPixel(b.west, b.north);
     const [rx2, ry2] = toPixel(b.east, b.south);
-    ctx.fillStyle = 'rgba(37, 99, 168, 0.12)';
+    ctx.fillStyle = 'rgba(37, 99, 168, 0.08)';
     ctx.fillRect(rx1, ry1, rx2 - rx1, ry2 - ry1);
     ctx.strokeStyle = '#2563a8';
     ctx.lineWidth = 3;
     ctx.lineJoin = 'round';
     ctx.strokeRect(rx1, ry1, rx2 - rx1, ry2 - ry1);
+
+    // Draw entry point markers
+    const pointColor = '#a43855';
+    const points = (entriesInExtent || []).filter(
+        (e) => Number.isFinite(Number(e.lat)) && Number.isFinite(Number(e.lon))
+    );
+    for (let i = 0; i < points.length; i++) {
+        const [px, py] = toPixel(Number(points[i].lon), Number(points[i].lat));
+        ctx.beginPath();
+        ctx.arc(px, py, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = pointColor;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.fillStyle = '#222';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(i + 1), px, py);
+    }
 
     // OSM attribution
     ctx.fillStyle = 'rgba(255,255,255,0.75)';
@@ -423,7 +444,7 @@ async function buildPdfContent(scope, storyId, pageSize, landscape) {
 
         let mapSection = '';
         if (extent) {
-            const mapImageUrl = await _renderOfflineExtentMap(extent);
+            const mapImageUrl = await _renderOfflineExtentMap(extent, entriesToPrint);
             if (mapImageUrl) {
                 mapSection = `
                     <section class="story-map-section">
