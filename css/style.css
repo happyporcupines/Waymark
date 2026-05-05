@@ -1146,6 +1146,7 @@ input, textarea {
     border-radius: 4px;
     cursor: pointer;
     font-size: 12px;
+    touch-action: manipulation;
 }
 
 /* Visual feedback when hovering over story action button */
@@ -1500,7 +1501,7 @@ p, small, span, div, button, input, textarea {
 .offline-map-row {
     border: 1px solid #e2c8d2;
     border-radius: 8px;
-    padding: 10px;
+    padding: 12px;
     display: flex;
     justify-content: space-between;
     gap: 10px;
@@ -1526,6 +1527,7 @@ p, small, span, div, button, input, textarea {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .offline-chooser-item {
@@ -1534,11 +1536,13 @@ p, small, span, div, button, input, textarea {
     border: 1px solid #d9b8c4;
     border-radius: 8px;
     background: #fff;
-    padding: 10px;
+    padding: 14px 12px;
     cursor: pointer;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
+    min-height: 56px;
+    box-sizing: border-box;
 }
 
 .offline-chooser-item strong {
@@ -1577,4 +1581,64 @@ p, small, span, div, button, input, textarea {
 .offline-sync-card p {
     margin: 0;
     color: #555;
+}
+
+/* ========================================
+   OFFLINE MAP UI - MOBILE OVERRIDES
+   ======================================== */
+
+@media (max-width: 600px) {
+    /* Stack info and actions vertically on small screens */
+    .offline-map-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .offline-map-row-info {
+        gap: 4px;
+    }
+
+    /* Make action buttons full-width and touch-friendly */
+    .offline-map-row-actions {
+        width: 100%;
+        gap: 10px;
+    }
+
+    /* Offline map row action buttons: bigger touch targets */
+    #offlineMapsModal .story-btn-small,
+    #offlineChooserModal .story-btn-small {
+        flex: 1;
+        padding: 10px 12px;
+        font-size: 14px;
+        min-height: 44px;
+        border-radius: 6px;
+    }
+
+    /* Chooser items: comfortable tap area */
+    .offline-chooser-item {
+        padding: 16px 14px;
+        min-height: 60px;
+        gap: 5px;
+    }
+
+    .offline-chooser-item strong {
+        font-size: 1em;
+    }
+
+    .offline-chooser-item small {
+        font-size: 0.85em;
+    }
+
+    /* Let the offline map list use more screen height */
+    .offline-map-list {
+        max-height: 50vh;
+    }
+
+    /* Offline modals: constrain properly for phone */
+    #offlineMapsModal .entry-modal-box,
+    #offlineChooserModal .entry-modal-box {
+        width: 95vw;
+        padding: 16px;
+    }
 }
