@@ -20,22 +20,6 @@ Direct latest release page:
 
 - https://github.com/happyporcupines/Waymark/releases/latest
 
-## Launch on Google Play (TWA)
-
-Quick launch path:
-
-1. Deploy the web app to your production HTTPS domain.
-2. Create `/.well-known/assetlinks.json` from `/.well-known/assetlinks.json.template` with your real package name and SHA-256 signing fingerprint.
-3. Run `npm run android:icons`.
-4. Run `npm run android:check`.
-5. Run `npm run android:doctor`.
-6. Run `WAYMARK_APP_ORIGIN=https://YOUR_DOMAIN npm run android:init`.
-7. Run `npm run android:build` and upload the generated `.aab` to Google Play Console (Internal testing first).
-
-Detailed guide: [docs/android-playstore-bubblewrap.md](docs/android-playstore-bubblewrap.md)
-
-## Current state
-
 - Guest mode works as before (session-only local state).
 - Authenticated mode is wired to Supabase and restores saved data per user.
 - Login button behavior is: sign in first, and if account does not exist, sign up.
