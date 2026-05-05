@@ -8,6 +8,32 @@ This project is now prepared for:
 - Supabase database persistence for per-user entries and stories
 - Progressive Web App support (manifest + service worker)
 
+## Download Waymark (Desktop)
+
+Download the latest Electron desktop builds from GitHub Releases:
+
+- Windows (.exe): https://github.com/happyporcupines/Waymark/releases
+- macOS (.dmg/.zip): https://github.com/happyporcupines/Waymark/releases
+- Linux (.AppImage): https://github.com/happyporcupines/Waymark/releases
+
+Direct latest release page:
+
+- https://github.com/happyporcupines/Waymark/releases/latest
+
+## Launch on Google Play (TWA)
+
+Quick launch path:
+
+1. Deploy the web app to your production HTTPS domain.
+2. Create `/.well-known/assetlinks.json` from `/.well-known/assetlinks.json.template` with your real package name and SHA-256 signing fingerprint.
+3. Run `npm run android:icons`.
+4. Run `npm run android:check`.
+5. Run `npm run android:doctor`.
+6. Run `WAYMARK_APP_ORIGIN=https://YOUR_DOMAIN npm run android:init`.
+7. Run `npm run android:build` and upload the generated `.aab` to Google Play Console (Internal testing first).
+
+Detailed guide: [docs/android-playstore-bubblewrap.md](docs/android-playstore-bubblewrap.md)
+
 ## Current state
 
 - Guest mode works as before (session-only local state).
