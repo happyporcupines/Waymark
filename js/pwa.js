@@ -67,7 +67,7 @@ function applyRuntimeCapabilities(caps) {
 
 window.addEventListener('load', async () => {
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js').then((registration) => {
+        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((registration) => {
             registration.update().catch(() => {
                 // Ignore update-check failures; normal registration still works.
             });
