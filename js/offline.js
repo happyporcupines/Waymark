@@ -8,8 +8,7 @@ const OFFLINE_EXTENT_LIMIT = 3;
 const OFFLINE_MAX_LNG_SPAN = 1.8;
 const OFFLINE_MAX_LAT_SPAN = 1.8;
 const OFFLINE_TILE_CACHE = 'waymark-offline-tiles-v1';
-const OFFLINE_TILE_ZOOMS = [8, 9, 10, 11, 12];
-const OFFLINE_TILE_MAX_COUNT = 700;
+const OFFLINE_TILE_MAX_COUNT = 2000;
 
 function getOfflineStorageUserKey() {
     if (authenticatedUser && authenticatedUser.id) {
@@ -138,10 +137,12 @@ function clampTile(v, z) {
     return Math.max(0, Math.min(max, v));
 }
 
-function buildOfflineTileUrls(extentBounds) {
+function buildOfflineTileUrls(extentBounds, currentZoom) {
+    // Cache overview tiles (zoom 8–11) plus tiles up to the current view zoom
+    // so the map looks sharp offline at the zoom level the user was on.
+    const maxZoom = Math.min(16, Math.max(12, Math.floor(currentZoom || 12)));
     const urls = [];
-    for (let i = 0; i < OFFLINE_TILE_ZOOMS.length; i += 1) {
-        const z = OFFLINE_TILE_ZOOMS[i];
+    for (let z = 8; z <= maxZoom; z += 1) {
         const sw = lngLatToTileXY(extentBounds.west, extentBounds.south, z);
         const ne = lngLatToTileXY(extentBounds.east, extentBounds.north, z);
 
@@ -162,12 +163,12 @@ function buildOfflineTileUrls(extentBounds) {
     return urls;
 }
 
-async function prefetchExtentTiles(extentBounds, statusEl) {
+async function prefetchExtentTiles(extentBounds, statusEl, currentZoom) {
     if (!('caches' in window) || !navigator.serviceWorker) {
         return;
     }
 
-    const urls = buildOfflineTileUrls(extentBounds);
+    const urls = buildOfflineTileUrls(extentBounds, currentZoom);
     if (!urls.length) {
         return;
     }
@@ -175,13 +176,13 @@ async function prefetchExtentTiles(extentBounds, statusEl) {
     const cache = await caches.open(OFFLINE_TILE_CACHE);
     for (let i = 0; i < urls.length; i += 1) {
         const url = urls[i];
-        if (statusEl) {
-            statusEl.textContent = `Caching map tiles ${i + 1}/${urls.length}...`;
-        }
         try {
             const existing = await cache.match(url);
             if (existing) {
                 continue;
+            }
+            if (statusEl) {
+                statusEl.textContent = `Caching map tiles ${i + 1}/${urls.length}...`;
             }
             const response = await fetch(url, { mode: 'no-cors' });
             if (response) {
@@ -410,7 +411,7 @@ async function saveCurrentMapExtentForOffline() {
         statusEl.textContent = 'Saving extent metadata...';
     }
 
-    await prefetchExtentTiles(newExtent.bounds, statusEl);
+    await prefetchExtentTiles(newExtent.bounds, statusEl, bounds.zoom);
 
     extents.push(newExtent);
     writeOfflineExtents(extents);
