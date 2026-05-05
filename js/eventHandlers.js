@@ -208,11 +208,12 @@ document.addEventListener('click', (event) => {
  * - Toggling story visibility
  * - Color picker interactions
  */
-// PDF scope dropdown: show/hide story picker
+// PDF scope dropdown: show/hide story picker and hint
 document.addEventListener('change', (event) => {
     if (event.target && event.target.id === 'pdfScopeSelect') {
-        const wrap = document.getElementById('pdfStorySelectWrap');
-        if (wrap) wrap.style.display = event.target.value === 'story' ? 'block' : 'none';
+        if (typeof _updatePdfScopeUi === 'function') {
+            _updatePdfScopeUi(event.target.value);
+        }
     }
 });
 

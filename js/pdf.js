@@ -1,14 +1,174 @@
 // ============================================================================
 // PDF.JS — Story/Entry PDF Export
 // Always prints a purpose-built export document (browser + Electron).
+//
+// Map rendering uses pure 2D canvas + OSM tile fetching — no WebGL.
+// This works on mobile WebView where a second MapLibre context would fail.
+//
+// Printing uses window.open() so that on Android the generated document
+// is what gets printed (iframe.print() prints the parent page on Android).
 // ============================================================================
+
+// ============================================================================
+// TILE-BASED MAP RENDERING  (2D canvas, no WebGL)
+// ============================================================================
+
+function _lngToTileX(lng, zoom) {
+    return (lng + 180) / 360 * Math.pow(2, zoom);
+}
+
+function _latToTileY(lat, zoom) {
+    const latRad = lat * Math.PI / 180;
+    return (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, zoom);
+}
+
+function _loadTileImage(url) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = url;
+    });
+}
+
+/**
+ * Render an OSM tile map with a route line and numbered markers to a data URL.
+ * coords: Array of [lng, lat] pairs. lineColor: CSS color string.
+ */
+async function renderMapToDataUrl(coords, lineColor) {
+    const TILE_SIZE = 256;
+    const W = 900;
+    const H = 500;
+
+    if (!coords || coords.length === 0) return '';
+
+    // Bounding box
+    let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    for (const [lng, lat] of coords) {
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+    }
+
+    // Pad bounding box
+    const lngPad = Math.max((maxLng - minLng) * 0.25, 0.008);
+    const latPad = Math.max((maxLat - minLat) * 0.25, 0.005);
+    minLng -= lngPad; maxLng += lngPad;
+    minLat -= latPad; maxLat += latPad;
+
+    // Pick zoom so bbox fits inside 85% of canvas
+    let zoom = 14;
+    for (; zoom >= 1; zoom--) {
+        const xSpan = (_lngToTileX(maxLng, zoom) - _lngToTileX(minLng, zoom)) * TILE_SIZE;
+        const ySpan = (_latToTileY(minLat, zoom) - _latToTileY(maxLat, zoom)) * TILE_SIZE;
+        if (xSpan <= W * 0.85 && ySpan <= H * 0.85) break;
+    }
+
+    // Center the bounding box in the canvas
+    const centerLng = (minLng + maxLng) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+    const tileOriginX = _lngToTileX(centerLng, zoom) - W / 2 / TILE_SIZE;
+    const tileOriginY = _latToTileY(centerLat, zoom) - H / 2 / TILE_SIZE;
+
+    // Tile range needed
+    const txMin = Math.floor(tileOriginX);
+    const txMax = Math.floor(tileOriginX + W / TILE_SIZE) + 1;
+    const tyMin = Math.floor(tileOriginY);
+    const tyMax = Math.floor(tileOriginY + H / TILE_SIZE) + 1;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Background
+    ctx.fillStyle = '#e8e0d8';
+    ctx.fillRect(0, 0, W, H);
+
+    // Load and draw tiles in parallel
+    const tilePromises = [];
+    for (let tx = txMin; tx <= txMax; tx++) {
+        for (let ty = tyMin; ty <= tyMax; ty++) {
+            const pixX = (tx - tileOriginX) * TILE_SIZE;
+            const pixY = (ty - tileOriginY) * TILE_SIZE;
+            tilePromises.push(
+                _loadTileImage(`https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`)
+                    .then((img) => {
+                        if (img) ctx.drawImage(img, Math.round(pixX), Math.round(pixY), TILE_SIZE, TILE_SIZE);
+                    })
+            );
+        }
+    }
+    await Promise.all(tilePromises);
+
+    // Convert lng/lat → canvas pixel
+    const toPixel = (lng, lat) => [
+        (_lngToTileX(lng, zoom) - tileOriginX) * TILE_SIZE,
+        (_latToTileY(lat, zoom) - tileOriginY) * TILE_SIZE
+    ];
+
+    const color = lineColor || '#a43855';
+
+    // Route line
+    if (coords.length >= 2) {
+        ctx.beginPath();
+        const [sx, sy] = toPixel(coords[0][0], coords[0][1]);
+        ctx.moveTo(sx, sy);
+        for (let i = 1; i < coords.length; i++) {
+            const [cx, cy] = toPixel(coords[i][0], coords[i][1]);
+            ctx.lineTo(cx, cy);
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 0.88;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    // Numbered markers
+    for (let i = 0; i < coords.length; i++) {
+        const [px, py] = toPixel(coords[i][0], coords[i][1]);
+        ctx.beginPath();
+        ctx.arc(px, py, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.fillStyle = '#222';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(i + 1), px, py);
+    }
+
+    // OSM attribution on canvas
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    const attrText = '© OpenStreetMap contributors';
+    ctx.font = '10px sans-serif';
+    const tw = ctx.measureText(attrText).width;
+    ctx.fillRect(W - tw - 10, H - 18, tw + 8, 18);
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(attrText, W - 4, H - 2);
+
+    return canvas.toDataURL('image/png');
+}
 
 function openPdfExportModal() {
     const modal = document.getElementById('pdfExportModal');
     const storySelect = document.getElementById('pdfStorySelect');
     const statusEl = document.getElementById('pdfExportStatus');
+    const offlineOption = document.getElementById('pdfOfflineOption');
+    const scopeEl = document.getElementById('pdfScopeSelect');
     if (!modal || !storySelect) return;
 
+    // Populate story list
     storySelect.innerHTML = '';
     (stories || []).forEach((story) => {
         const opt = document.createElement('option');
@@ -16,6 +176,16 @@ function openPdfExportModal() {
         opt.textContent = story.title || 'Untitled Story';
         storySelect.appendChild(opt);
     });
+
+    // Show "Offline map extent" option only when one is active
+    const hasOfflineExtent = typeof getSelectedOfflineExtentId === 'function' && !!getSelectedOfflineExtentId();
+    if (offlineOption) {
+        offlineOption.style.display = hasOfflineExtent ? '' : 'none';
+    }
+
+    // Reset scope to "all" when opening
+    if (scopeEl) scopeEl.value = 'all';
+    _updatePdfScopeUi('all');
 
     if (statusEl) statusEl.textContent = '';
     modal.style.display = 'flex';
@@ -26,178 +196,44 @@ function closePdfExportModal() {
     if (modal) modal.style.display = 'none';
 }
 
+/** Update hint and sub-selects when scope changes. */
+function _updatePdfScopeUi(scope) {
+    const storyWrap = document.getElementById('pdfStorySelectWrap');
+    const hint = document.getElementById('pdfAllEntriesHint');
+    if (storyWrap) storyWrap.style.display = scope === 'story' ? 'block' : 'none';
+    if (hint) hint.style.display = scope === 'all' ? 'block' : 'none';
+}
+
+/** Return all entries belonging to a story, including those without GPS coords. */
 function getStoryEntries(story) {
     if (!story || !Array.isArray(story.entryIds)) return [];
     const byId = new Map((journalEntries || []).map((e) => [e.id, e]));
-    return story.entryIds
-        .map((id) => byId.get(id))
-        .filter(Boolean)
-        .filter((e) => Number.isFinite(Number(e.lat)) && Number.isFinite(Number(e.lon)));
+    return story.entryIds.map((id) => byId.get(id)).filter(Boolean);
 }
 
-function getMapStyleForExport() {
-    return {
-        version: 8,
-        sources: {
-            osm: {
-                type: 'raster',
-                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                tileSize: 256,
-                attribution: '\u00a9 OpenStreetMap contributors'
-            }
-        },
-        layers: [{ id: 'osm-base', type: 'raster', source: 'osm' }]
-    };
+/** Return the [lng, lat] coords for a story's entries that have a location. */
+function _storyCoordsWithLocation(story) {
+    return getStoryEntries(story)
+        .filter((e) => Number.isFinite(Number(e.lat)) && Number.isFinite(Number(e.lon)))
+        .map((e) => [Number(e.lon), Number(e.lat)]);
 }
 
-function waitForMapIdle(map, timeoutMs = 7000) {
-    return new Promise((resolve) => {
-        let finished = false;
-        const done = () => {
-            if (finished) return;
-            finished = true;
-            resolve();
-        };
-        const timeout = setTimeout(done, timeoutMs);
-        map.once('idle', () => {
-            clearTimeout(timeout);
-            done();
-        });
-    });
+/** Render a map for an offline extent (bounding box). */
+async function _renderOfflineExtentMap(extent) {
+    if (!extent || !extent.bounds) return '';
+    const b = extent.bounds; // { north, south, east, west }
+    // Use four corners so renderMapToDataUrl can compute the bbox
+    const coords = [
+        [b.west, b.north],
+        [b.east, b.north],
+        [b.east, b.south],
+        [b.west, b.south]
+    ];
+    return renderMapToDataUrl(coords, '#2563a8');
 }
 
-function getBoundsForCoordinates(coords) {
-    const bounds = new maplibregl.LngLatBounds(coords[0], coords[0]);
-    for (let i = 1; i < coords.length; i += 1) {
-        bounds.extend(coords[i]);
-    }
-    return bounds;
-}
-
-async function generateStoryMapImageDataUrl(story) {
-    if (!story || typeof maplibregl === 'undefined') return '';
-    const styleUrl = getMapStyleForExport();
-
-    const entries = getStoryEntries(story);
-    if (!entries.length) return '';
-
-    const coords = entries.map((e) => [Number(e.lon), Number(e.lat)]);
-    const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:-99999px;top:-99999px;width:1000px;height:560px;pointer-events:none;';
-    document.body.appendChild(container);
-
-    const exportMap = new maplibregl.Map({
-        container,
-        style: styleUrl,
-        center: coords[0],
-        zoom: 10,
-        interactive: false,
-        preserveDrawingBuffer: true
-    });
-
-    try {
-        await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('Map image render timed out')), 10000);
-            exportMap.once('load', () => {
-                clearTimeout(timeout);
-                resolve();
-            });
-            exportMap.once('error', (evt) => {
-                clearTimeout(timeout);
-                reject(evt?.error || new Error('Map image render failed'));
-            });
-        });
-
-        exportMap.addSource('story-route', {
-            type: 'geojson',
-            data: {
-                type: 'FeatureCollection',
-                features: [
-                    {
-                        type: 'Feature',
-                        geometry: { type: 'LineString', coordinates: coords },
-                        properties: {}
-                    }
-                ]
-            }
-        });
-        exportMap.addLayer({
-            id: 'story-route-line',
-            type: 'line',
-            source: 'story-route',
-            paint: {
-                'line-color': story.lineColor || '#a43855',
-                'line-width': 4,
-                'line-opacity': 0.9
-            }
-        });
-
-        exportMap.addSource('story-points', {
-            type: 'geojson',
-            data: {
-                type: 'FeatureCollection',
-                features: coords.map((c, idx) => ({
-                    type: 'Feature',
-                    geometry: { type: 'Point', coordinates: c },
-                    properties: { order: idx + 1 }
-                }))
-            }
-        });
-        exportMap.addLayer({
-            id: 'story-points-circle',
-            type: 'circle',
-            source: 'story-points',
-            paint: {
-                'circle-radius': 6,
-                'circle-color': '#ffffff',
-                'circle-stroke-color': story.lineColor || '#a43855',
-                'circle-stroke-width': 2
-            }
-        });
-
-        const bounds = getBoundsForCoordinates(coords);
-        exportMap.fitBounds(bounds, { padding: 60, duration: 0, maxZoom: 13 });
-        await waitForMapIdle(exportMap, 7000);
-
-        const dataUrl = exportMap.getCanvas().toDataURL('image/png');
-        return dataUrl;
-    } catch (error) {
-        console.error('[Waymark] Could not generate story map image for PDF:', error);
-        return '';
-    } finally {
-        exportMap.remove();
-        container.remove();
-    }
-}
-
-async function buildPdfContent(scope, storyId, pageSize, landscape) {
-    let entriesToPrint = [];
-    let heading = 'Waymark — All Entries';
-    let mapSection = '';
-
-    let selectedStory = null;
-    if (scope === 'story' && storyId) {
-        selectedStory = (stories || []).find((s) => s.id === Number(storyId)) || null;
-        if (selectedStory) {
-            heading = `Waymark — ${selectedStory.title}`;
-            entriesToPrint = getStoryEntries(selectedStory);
-            const mapImageUrl = await generateStoryMapImageDataUrl(selectedStory);
-            if (mapImageUrl) {
-                mapSection = `
-                    <section class="story-map-section">
-                        <h2>Story Route Map</h2>
-                        <img src="${mapImageUrl}" alt="Story route map" class="story-map-image" />
-                    </section>
-                `;
-            }
-        }
-    }
-
-    if (!entriesToPrint.length) {
-        entriesToPrint = journalEntries || [];
-    }
-
-    const rows = entriesToPrint.map((entry) => {
+function _renderEntryRows(entries) {
+    return (entries || []).map((entry) => {
         const date = entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : '';
         const hasCoords = Number.isFinite(Number(entry.lat)) && Number.isFinite(Number(entry.lon));
         const image = entry.image
@@ -211,16 +247,10 @@ async function buildPdfContent(scope, storyId, pageSize, landscape) {
                 <div class="body">${entry.textHtml || entry.text || ''}</div>
             </div>`;
     }).join('\n');
+}
 
-    const orientation = landscape ? 'landscape' : 'portrait';
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<title>${heading}</title>
-<style>
-  @page { size: ${pageSize} ${orientation}; margin: 12mm; }
+const PDF_STYLES = `
+  @page { size: PAGE_SIZE ORIENTATION; margin: 12mm; }
   body { font-family: Georgia, serif; margin: 0; color: #1a1a1a; }
   h1.report-title { font-size: 1.8em; color: #a43855; margin: 0 0 0.2em; }
   .report-date { font-size: 0.85em; color: #666; margin: 0 0 1.4em; }
@@ -233,7 +263,19 @@ async function buildPdfContent(scope, storyId, pageSize, landscape) {
   .entry-image { max-width: 100%; max-height: 220px; border-radius: 4px; margin: 8px 0; }
   .body { font-size: 0.95em; line-height: 1.55; }
   .empty { color: #888; font-style: italic; margin-top: 2em; }
-</style>
+`;
+
+function _buildHtml(heading, pageSize, landscape, mapSection, rows) {
+    const orientation = landscape ? 'landscape' : 'portrait';
+    const styles = PDF_STYLES
+        .replace('PAGE_SIZE', pageSize)
+        .replace('ORIENTATION', orientation);
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>${heading}</title>
+<style>${styles}</style>
 </head>
 <body>
 <h1 class="report-title">${heading}</h1>
@@ -242,6 +284,62 @@ ${mapSection}
 ${rows || '<p class="empty">No entries to export.</p>'}
 </body>
 </html>`;
+}
+
+async function buildPdfContent(scope, storyId, pageSize, landscape) {
+    // ── All Entries ──────────────────────────────────────────────────────────
+    if (scope !== 'story' && scope !== 'offline') {
+        const rows = _renderEntryRows(journalEntries || []);
+        return _buildHtml('Waymark — All Entries', pageSize, landscape, '', rows);
+    }
+
+    // ── Story ────────────────────────────────────────────────────────────────
+    if (scope === 'story') {
+        const selectedStory = (stories || []).find((s) => s.id === Number(storyId)) || null;
+        if (!selectedStory) {
+            return _buildHtml('Waymark — Story', pageSize, landscape, '', '');
+        }
+        const heading = `Waymark — ${selectedStory.title || 'Story'}`;
+        const entriesToPrint = getStoryEntries(selectedStory);
+        const rows = _renderEntryRows(entriesToPrint);
+
+        const coords = _storyCoordsWithLocation(selectedStory);
+        let mapSection = '';
+        if (coords.length >= 1) {
+            const mapImageUrl = await renderMapToDataUrl(coords, selectedStory.lineColor || '#a43855');
+            if (mapImageUrl) {
+                mapSection = `
+                    <section class="story-map-section">
+                        <h2>Story Route Map</h2>
+                        <img src="${mapImageUrl}" alt="Story route map" class="story-map-image" />
+                    </section>`;
+            }
+        }
+        return _buildHtml(heading, pageSize, landscape, mapSection, rows);
+    }
+
+    // ── Offline Extent ───────────────────────────────────────────────────────
+    if (scope === 'offline') {
+        const extent = typeof getSelectedOfflineExtent === 'function' ? getSelectedOfflineExtent() : null;
+        const extentName = (extent && extent.name) ? extent.name : 'Offline Map Extent';
+        const heading = `Waymark — ${extentName}`;
+        const rows = _renderEntryRows(journalEntries || []);
+
+        let mapSection = '';
+        if (extent) {
+            const mapImageUrl = await _renderOfflineExtentMap(extent);
+            if (mapImageUrl) {
+                mapSection = `
+                    <section class="story-map-section">
+                        <h2>Offline Map Extent</h2>
+                        <img src="${mapImageUrl}" alt="Offline map extent" class="story-map-image" />
+                    </section>`;
+            }
+        }
+        return _buildHtml(heading, pageSize, landscape, mapSection, rows);
+    }
+
+    return _buildHtml('Waymark', pageSize, landscape, '', '');
 }
 
 async function performPdfExport() {
@@ -257,33 +355,33 @@ async function performPdfExport() {
     const landscape = orientationEl ? orientationEl.value === 'landscape' : false;
 
     if (statusEl) {
-        statusEl.textContent = scope === 'story' ? 'Rendering story map and preparing export…' : 'Preparing export…';
+        statusEl.textContent = scope === 'all'
+            ? 'Preparing export…'
+            : 'Rendering map and preparing export…';
     }
+
+    closePdfExportModal();
 
     const content = await buildPdfContent(scope, storyId, pageSize, landscape);
 
-    const printFrame = document.createElement('iframe');
-    printFrame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
-    document.body.appendChild(printFrame);
-
-    const frameWindow = printFrame.contentWindow;
-    const frameDocument = printFrame.contentDocument || (frameWindow && frameWindow.document);
-    if (!frameWindow || !frameDocument) {
-        printFrame.remove();
-        if (statusEl) statusEl.textContent = 'Could not open print document in this browser.';
+    // Use window.open() so the generated document is what prints.
+    // iframe.print() on Android WebView prints the parent page, not the iframe.
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+        if (statusEl) statusEl.textContent = 'Pop-up blocked — please allow pop-ups and try again.';
         return;
     }
+    printWin.document.open();
+    printWin.document.write(content);
+    printWin.document.close();
 
-    frameDocument.open();
-    frameDocument.write(content);
-    frameDocument.close();
-
-    // Let layout settle before printing, then clean up.
+    // Wait for images (map tiles baked into data URLs) to be ready, then print.
+    printWin.addEventListener('load', () => {
+        printWin.focus();
+        printWin.print();
+    });
+    // Fallback in case load already fired
     setTimeout(() => {
-        frameWindow.focus();
-        frameWindow.print();
-        setTimeout(() => printFrame.remove(), 1000);
-    }, 700);
-
-    closePdfExportModal();
+        try { printWin.focus(); printWin.print(); } catch (_) {}
+    }, 1200);
 }

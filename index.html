@@ -423,7 +423,12 @@
         <select id="pdfScopeSelect" style="width: 100%; padding: 8px; margin: 6px 0 14px; border: 1px solid #ccc; border-radius: 4px;">
             <option value="all">All entries</option>
             <option value="story">A specific story</option>
+            <option id="pdfOfflineOption" value="offline" style="display: none;">Offline map extent</option>
         </select>
+
+        <p id="pdfAllEntriesHint" style="margin: -8px 0 14px; font-size: 0.82em; color: #777; display: block;">
+            Map images are only included when exporting a story or an offline map extent.
+        </p>
 
         <div id="pdfStorySelectWrap" style="display: none;">
             <label for="pdfStorySelect" style="font-weight: bold;">Choose story</label>
