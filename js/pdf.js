@@ -218,22 +218,37 @@ function _storyCoordsWithLocation(story) {
         .map((e) => [Number(e.lon), Number(e.lat)]);
 }
 
-/** Render a map showing an offline extent bounding box with entry point markers. */
+/** Render a map for an offline extent: zoom to fit entry points, markers only, no line, no rectangle. */
 async function _renderOfflineExtentMap(extent, entriesInExtent) {
-    if (!extent || !extent.bounds) return '';
-    const b = extent.bounds; // { north, south, east, west }
+    const points = (entriesInExtent || []).filter(
+        (e) => Number.isFinite(Number(e.lat)) && Number.isFinite(Number(e.lon))
+    );
+    if (points.length === 0) return '';
+    const coords = points.map((e) => [Number(e.lon), Number(e.lat)]);
+    return _renderPointsOnlyMap(coords, '#a43855');
+}
+
+/**
+ * Like renderMapToDataUrl but draws only numbered markers, no route line.
+ */
+async function _renderPointsOnlyMap(coords, markerColor) {
     const TILE_SIZE = 256;
     const W = 900;
     const H = 500;
+    if (!coords || coords.length === 0) return '';
 
-    // Tiny padding so the bbox outline isn't flush with the canvas edge
-    let minLng = b.west, maxLng = b.east, minLat = b.south, maxLat = b.north;
-    const lngPad = Math.max((maxLng - minLng) * 0.08, 0.003);
-    const latPad = Math.max((maxLat - minLat) * 0.08, 0.002);
+    let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    for (const [lng, lat] of coords) {
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+    }
+    const lngPad = Math.max((maxLng - minLng) * 0.25, 0.008);
+    const latPad = Math.max((maxLat - minLat) * 0.25, 0.005);
     minLng -= lngPad; maxLng += lngPad;
     minLat -= latPad; maxLat += latPad;
 
-    // Pick zoom so the padded bbox fits inside 85% of the canvas
     let zoom = 14;
     for (; zoom >= 1; zoom--) {
         const xSpan = (_lngToTileX(maxLng, zoom) - _lngToTileX(minLng, zoom)) * TILE_SIZE;
@@ -255,7 +270,6 @@ async function _renderOfflineExtentMap(extent, entriesInExtent) {
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d');
-
     ctx.fillStyle = '#e8e0d8';
     ctx.fillRect(0, 0, W, H);
 
@@ -272,34 +286,20 @@ async function _renderOfflineExtentMap(extent, entriesInExtent) {
     }
     await Promise.all(tilePromises);
 
-    // Convert lng/lat → canvas pixel
     const toPixel = (lng, lat) => [
         (_lngToTileX(lng, zoom) - tileOriginX) * TILE_SIZE,
         (_latToTileY(lat, zoom) - tileOriginY) * TILE_SIZE
     ];
+    const color = markerColor || '#a43855';
 
-    // Draw extent rectangle (fill + outline)
-    const [rx1, ry1] = toPixel(b.west, b.north);
-    const [rx2, ry2] = toPixel(b.east, b.south);
-    ctx.fillStyle = 'rgba(37, 99, 168, 0.08)';
-    ctx.fillRect(rx1, ry1, rx2 - rx1, ry2 - ry1);
-    ctx.strokeStyle = '#2563a8';
-    ctx.lineWidth = 3;
-    ctx.lineJoin = 'round';
-    ctx.strokeRect(rx1, ry1, rx2 - rx1, ry2 - ry1);
-
-    // Draw entry point markers
-    const pointColor = '#a43855';
-    const points = (entriesInExtent || []).filter(
-        (e) => Number.isFinite(Number(e.lat)) && Number.isFinite(Number(e.lon))
-    );
-    for (let i = 0; i < points.length; i++) {
-        const [px, py] = toPixel(Number(points[i].lon), Number(points[i].lat));
+    // Numbered markers only — no route line
+    for (let i = 0; i < coords.length; i++) {
+        const [px, py] = toPixel(coords[i][0], coords[i][1]);
         ctx.beginPath();
         ctx.arc(px, py, 7, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
-        ctx.strokeStyle = pointColor;
+        ctx.strokeStyle = color;
         ctx.lineWidth = 2.5;
         ctx.stroke();
         ctx.fillStyle = '#222';
@@ -309,7 +309,6 @@ async function _renderOfflineExtentMap(extent, entriesInExtent) {
         ctx.fillText(String(i + 1), px, py);
     }
 
-    // OSM attribution
     ctx.fillStyle = 'rgba(255,255,255,0.75)';
     const attrText = '\u00a9 OpenStreetMap contributors';
     ctx.font = '10px sans-serif';
