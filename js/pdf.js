@@ -218,18 +218,88 @@ function _storyCoordsWithLocation(story) {
         .map((e) => [Number(e.lon), Number(e.lat)]);
 }
 
-/** Render a map for an offline extent (bounding box). */
+/** Render a map showing an offline extent bounding box — no route line. */
 async function _renderOfflineExtentMap(extent) {
     if (!extent || !extent.bounds) return '';
     const b = extent.bounds; // { north, south, east, west }
-    // Use four corners so renderMapToDataUrl can compute the bbox
-    const coords = [
-        [b.west, b.north],
-        [b.east, b.north],
-        [b.east, b.south],
-        [b.west, b.south]
+    const TILE_SIZE = 256;
+    const W = 900;
+    const H = 500;
+
+    // Tiny padding so the bbox outline isn't flush with the canvas edge
+    let minLng = b.west, maxLng = b.east, minLat = b.south, maxLat = b.north;
+    const lngPad = Math.max((maxLng - minLng) * 0.08, 0.003);
+    const latPad = Math.max((maxLat - minLat) * 0.08, 0.002);
+    minLng -= lngPad; maxLng += lngPad;
+    minLat -= latPad; maxLat += latPad;
+
+    // Pick zoom so the padded bbox fits inside 85% of the canvas
+    let zoom = 14;
+    for (; zoom >= 1; zoom--) {
+        const xSpan = (_lngToTileX(maxLng, zoom) - _lngToTileX(minLng, zoom)) * TILE_SIZE;
+        const ySpan = (_latToTileY(minLat, zoom) - _latToTileY(maxLat, zoom)) * TILE_SIZE;
+        if (xSpan <= W * 0.85 && ySpan <= H * 0.85) break;
+    }
+
+    const centerLng = (minLng + maxLng) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+    const tileOriginX = _lngToTileX(centerLng, zoom) - W / 2 / TILE_SIZE;
+    const tileOriginY = _latToTileY(centerLat, zoom) - H / 2 / TILE_SIZE;
+
+    const txMin = Math.floor(tileOriginX);
+    const txMax = Math.floor(tileOriginX + W / TILE_SIZE) + 1;
+    const tyMin = Math.floor(tileOriginY);
+    const tyMax = Math.floor(tileOriginY + H / TILE_SIZE) + 1;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#e8e0d8';
+    ctx.fillRect(0, 0, W, H);
+
+    const tilePromises = [];
+    for (let tx = txMin; tx <= txMax; tx++) {
+        for (let ty = tyMin; ty <= tyMax; ty++) {
+            const pixX = (tx - tileOriginX) * TILE_SIZE;
+            const pixY = (ty - tileOriginY) * TILE_SIZE;
+            tilePromises.push(
+                _loadTileImage(`https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`)
+                    .then((img) => { if (img) ctx.drawImage(img, Math.round(pixX), Math.round(pixY), TILE_SIZE, TILE_SIZE); })
+            );
+        }
+    }
+    await Promise.all(tilePromises);
+
+    // Convert lng/lat → canvas pixel
+    const toPixel = (lng, lat) => [
+        (_lngToTileX(lng, zoom) - tileOriginX) * TILE_SIZE,
+        (_latToTileY(lat, zoom) - tileOriginY) * TILE_SIZE
     ];
-    return renderMapToDataUrl(coords, '#2563a8');
+
+    // Draw extent rectangle (fill + outline)
+    const [rx1, ry1] = toPixel(b.west, b.north);
+    const [rx2, ry2] = toPixel(b.east, b.south);
+    ctx.fillStyle = 'rgba(37, 99, 168, 0.12)';
+    ctx.fillRect(rx1, ry1, rx2 - rx1, ry2 - ry1);
+    ctx.strokeStyle = '#2563a8';
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.strokeRect(rx1, ry1, rx2 - rx1, ry2 - ry1);
+
+    // OSM attribution
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    const attrText = '\u00a9 OpenStreetMap contributors';
+    ctx.font = '10px sans-serif';
+    const tw = ctx.measureText(attrText).width;
+    ctx.fillRect(W - tw - 10, H - 18, tw + 8, 18);
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(attrText, W - 4, H - 2);
+
+    return canvas.toDataURL('image/png');
 }
 
 function _renderEntryRows(entries) {
@@ -323,7 +393,20 @@ async function buildPdfContent(scope, storyId, pageSize, landscape) {
         const extent = typeof getSelectedOfflineExtent === 'function' ? getSelectedOfflineExtent() : null;
         const extentName = (extent && extent.name) ? extent.name : 'Offline Map Extent';
         const heading = `Waymark — ${extentName}`;
-        const rows = _renderEntryRows(journalEntries || []);
+
+        // Filter entries to those with GPS coords within the extent bounds
+        let entriesToPrint = journalEntries || [];
+        if (extent && extent.bounds) {
+            const b = extent.bounds;
+            entriesToPrint = entriesToPrint.filter((e) => {
+                const lat = Number(e.lat);
+                const lon = Number(e.lon);
+                return Number.isFinite(lat) && Number.isFinite(lon) &&
+                    lat >= b.south && lat <= b.north &&
+                    lon >= b.west && lon <= b.east;
+            });
+        }
+        const rows = _renderEntryRows(entriesToPrint);
 
         let mapSection = '';
         if (extent) {

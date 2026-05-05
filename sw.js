@@ -1,4 +1,4 @@
-const CACHE_NAME = 'waymark-v28';
+const CACHE_NAME = 'waymark-v29';
 const TILE_CACHE_NAME = 'waymark-offline-tiles-v1';
 const APP_SHELL_FILES = [
     './',
